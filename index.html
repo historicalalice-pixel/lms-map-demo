@@ -27,14 +27,13 @@
     transform-style: preserve-3d;
     overflow:hidden;
     pointer-events:none;
-    /* оптимізація */
     contain: layout paint;
   }
   #cloud{
     position:absolute; inset:0;
     transform-style: preserve-3d;
     pointer-events:none;
-    transform: translateZ(0); /* GPU hint */
+    transform: translateZ(0);
   }
 
   .intro-content{
@@ -89,7 +88,7 @@
     text-shadow: 0 0 14px rgba(0,0,0,.55);
   }
 
-  /* Під час вихору: відрубаємо важкі ефекти */
+  /* During vortex: cut heavy effects */
   .vortex .year{
     text-shadow:none !important;
     filter:none !important;
@@ -170,24 +169,29 @@
   </div>
 </div>
 
-<div class="hint">ENTER → “вихор” → карта · На карті: перетягуй · Коліщатко — zoom</div>
+<div class="hint">ENTER → “занурення” → карта · На карті: перетягуй · Коліщатко — zoom</div>
 
 <script>
+/* ===== Years (4-digit only) ===== */
 function makeYears(start,end){ const out=[]; for(let y=start;y<=end;y++) out.push(String(y)); return out; }
 const YEARS_ALL = makeYears(1800, 2024);
 const LIMIT = 170;
 const YEARS = YEARS_ALL.slice(0, LIMIT);
 
-/* ====== TUNING ====== */
-const ORBIT_COUNT = 56;
+/* ===== TUNING: layout ===== */
+const ORBIT_COUNT   = 56;
 const SAFE_RADIUS_K = 0.23;
-const ORBIT_RADIUS_K = 0.36;
-const FOG_RADIUS_K = 0.52;
-const SPEED = 0.055;
+const ORBIT_RADIUS_K= 0.36;
+const FOG_RADIUS_K  = 0.52;
+const SPEED         = 0.055;
 
-/* ====== PERFORMANCE: how many items animate during vortex ======
-   1.0 = всі (важко), 0.6 = легше, 0.4 = ще легше
-*/
+/* ===== TUNING: vortex immersion ===== */
+const VORTEX_MS       = 2400;  // slower, cinematic
+const VORTEX_TWIST    = 14.0;  // how many turns in spiral
+const CAMERA_PUSH     = 900;   // camera moves forward
+const PULL_TO_CENTER  = 0.82;  // tunnel strength (0..1)
+
+/* ===== PERFORMANCE: animate only part of items during vortex ===== */
 const VORTEX_ACTIVE_RATIO = 0.55;
 
 const cloud = document.getElementById('cloud');
@@ -209,7 +213,7 @@ enterBtn.addEventListener('click', ()=>{
   if(vortex) return;
   vortex=true;
   vortexStart=performance.now();
-  stage.classList.add('vortex'); // вимкнути важкі ефекти
+  stage.classList.add('vortex'); // disable heavy effects
 });
 
 const items = YEARS.map((y,i)=>{
@@ -229,15 +233,13 @@ const items = YEARS.map((y,i)=>{
     z0: orbit ? (-60+Math.random()*140) : (-320+Math.random()*420),
     jx:(Math.random()*120-60),
     jy:(Math.random()*90-45),
-    frozen:false,
-    lastX:0,lastY:0,lastZ:0,lastScale:1,lastOp:0.1,lastFont:12
+    lastX:0,lastY:0,lastZ:0,lastScale:1,lastOp:0.1
   };
 });
 
-// determine which items are "active" in vortex once (stable)
 const vortexActiveCount = Math.floor(items.length * VORTEX_ACTIVE_RATIO);
 const vortexActiveSet = new Set();
-for(let i=0;i<vortexActiveCount;i++) vortexActiveSet.add(i); // перші N активні (в т.ч. orbit)
+for(let i=0;i<vortexActiveCount;i++) vortexActiveSet.add(i);
 
 let last=performance.now();
 function tick(now){
@@ -252,15 +254,17 @@ function tick(now){
   const R_ORB = clamp(minSide*ORBIT_RADIUS_K, 280, 520);
   const R_FOG = clamp(minSide*FOG_RADIUS_K, 420, 820);
 
-  const p=vortex ? clamp((now-vortexStart)/1500,0,1) : 0;
-  const pe=easeInOutCubic(p);
+  const p = vortex ? clamp((now - vortexStart)/VORTEX_MS, 0, 1) : 0;
+  const pe = easeInOutCubic(p);
+
+  // "camera" goes forward (immersion)
+  const cameraZ = vortex ? (pe * CAMERA_PUSH) : 0;
 
   rot += SPEED*dt*0.25;
 
   items.forEach((it,idx)=>{
     const vortexActive = !vortex || vortexActiveSet.has(idx);
 
-    // if vortex and not active => keep last transform/opacity (saves CPU)
     if(vortex && !vortexActive){
       it.el.style.transform =
         `translate3d(${it.lastX}px, ${it.lastY}px, ${it.lastZ}px) translate(-50%,-50%) scale(${it.lastScale})`;
@@ -269,8 +273,10 @@ function tick(now){
     }
 
     it.a += (SPEED*0.35)*dt*it.s;
-    const spinBoost = vortex ? (1 + pe*10.0) : 1;
-    const a = (it.a + rot) * spinBoost;
+
+    // Spiral twist increases with progress + index (vortex feel)
+    const spiral = vortex ? (pe * VORTEX_TWIST) : 0;
+    const a = it.a + rot + spiral * (0.35 + idx * 0.015);
 
     let r = it.orbit ? R_ORB : R_FOG;
 
@@ -283,38 +289,42 @@ function tick(now){
       y += Math.cos(now*0.00016 + it.ph) * 18 + it.jy*0.10;
     }
 
+    // keep center clean
     const dist = Math.hypot(x,y);
     if(dist < SAFE){
       const k = SAFE / Math.max(1, dist);
       x *= k; y *= k;
     }
 
+    // Tunnel pull to center during vortex (immersion)
+    if(vortex){
+      const pull = 1 - (pe * PULL_TO_CENTER);
+      x *= pull;
+      y *= pull;
+    }
+
     const zIdle = it.z0 + Math.sin(now*0.00033 + it.ph) * (it.orbit ? 18 : 34);
-    const z = vortex ? (zIdle + pe*(1200 + idx*2)) : zIdle;
+
+    // Fly toward camera + camera moves too
+    const zFly = vortex ? (pe * (1400 + idx * 1.8)) : 0;
+    const z = zIdle + zFly - cameraZ;
 
     const zNorm = clamp((z + 360)/1100, 0, 1);
 
-    // IMPORTANT: do NOT change fontSize during vortex (expensive layout)
-    const font = it.orbit ? (13 + zNorm*4) : (10 + zNorm*2);
+    // Do not change font-size during vortex (perf)
     if(!vortex){
+      const font = it.orbit ? (13 + zNorm*4) : (10 + zNorm*2);
       it.el.style.fontSize = font.toFixed(1)+'px';
-      it.lastFont = font;
-      // restore glow outside vortex
       it.el.style.textShadow = it.orbit
         ? '0 0 26px rgba(106,167,255,.22), 0 0 16px rgba(0,0,0,.55)'
         : '0 0 14px rgba(0,0,0,.55)';
+      it.el.style.filter = 'none';
     }
 
     const scale = it.orbit ? (1.00 + zNorm*0.75) : (0.75 + zNorm*0.55);
-
     const opacity = it.orbit
       ? clamp(0.32 + zNorm*0.55, 0.22, 0.88)
       : clamp(0.04 + zNorm*0.24, 0.02, 0.34);
-
-    // during vortex: no filter blur (heavy)
-    if(!vortex){
-      it.el.style.filter = 'none';
-    }
 
     const tx = cx + x;
     const ty = cy + y;
@@ -323,13 +333,12 @@ function tick(now){
     it.el.style.transform =
       `translate3d(${tx}px, ${ty}px, ${z}px) translate(-50%,-50%) scale(${scale})`;
 
-    // cache last
     it.lastX = tx; it.lastY = ty; it.lastZ = z;
     it.lastScale = scale; it.lastOp = opacity.toFixed(3);
   });
 
   if(vortex && p>=1){
-    stage.classList.remove('vortex'); // прибрати клас
+    stage.classList.remove('vortex');
     intro.style.opacity='0';
     setTimeout(()=>{
       intro.style.display='none';
