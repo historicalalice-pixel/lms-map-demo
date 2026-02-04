@@ -6,7 +6,6 @@
 <title>LMS — Intro</title>
 
 <style>
-  /* близько до вайбу 100lostspecies: елегантний serif + clean sans */
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
 
   *{box-sizing:border-box}
@@ -88,7 +87,7 @@
   }
   #enterBtn:hover{ border-color:#fff; transform:translateY(-1px); }
 
-  /* --- YEARS (text only, no bubbles) --- */
+  /* --- YEAR LABELS --- */
   .year{
     position:absolute;
     left:0; top:0;
@@ -99,12 +98,12 @@
     letter-spacing:.12em;
     color: rgba(232,238,252,.95);
     white-space:nowrap;
-    text-shadow: 0 0 14px rgba(0,0,0,.55);
     user-select:none;
     pointer-events:none;
+    text-shadow: 0 0 14px rgba(0,0,0,.55);
   }
 
-  /* ================= MAP ================= */
+  /* ================= MAP (unchanged) ================= */
   #wrap{
     position:fixed; inset:0;
     opacity:0; pointer-events:none;
@@ -182,11 +181,8 @@
 
 <body>
 
-<!-- INTRO -->
 <div id="intro">
-  <div id="stage">
-    <div id="cloud"></div>
-  </div>
+  <div id="stage"><div id="cloud"></div></div>
 
   <div class="intro-content" id="center">
     <h1>Навчання — це подорож</h1>
@@ -195,7 +191,6 @@
   </div>
 </div>
 
-<!-- MAP -->
 <div id="wrap">
   <div id="space">
     <div class="node" id="demoNode">
@@ -204,7 +199,6 @@
   </div>
 </div>
 
-<!-- DEMO SCENE -->
 <div id="scene">
   <div class="card">
     <h2>Демо-урок</h2>
@@ -216,10 +210,22 @@
 <div class="hint">ENTER → “вихор” → карта · На карті: перетягуй · Коліщатко — zoom</div>
 
 <script>
-/* ========= YEARS (тільки 4-значні) =========
-   Зараз: 30 років 1990–2019. Можеш змінити на будь-які 30 років.
+/* ========= MORE YEARS (тільки 4-значні) =========
+   Зробимо густо: 120 років.
+   Можеш змінити діапазон (start/end) як захочеш.
 */
-const YEARS = Array.from({length:30}, (_,i)=> String(1990+i));
+function makeYears(start, end){
+  const out=[];
+  for(let y=start; y<=end; y++) out.push(String(y));
+  return out;
+}
+const YEARS = makeYears(1800, 1919)  // 120 штук
+  .concat(makeYears(1920, 1949))     // +30
+  .concat(makeYears(1950, 1999))     // +50
+  .concat(makeYears(2000, 2024));    // +25
+// Разом: 225. Якщо забагато — нижче є LIMIT.
+const LIMIT = 140; // ✅ тут регулюєш густоту (80–160 добре)
+const YEARS_FINAL = YEARS.slice(0, LIMIT);
 
 const cloud = document.getElementById('cloud');
 const centerEl = document.getElementById('center');
@@ -230,57 +236,54 @@ const wrap = document.getElementById('wrap');
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function easeInOutCubic(x){ return x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2; }
 
-/* ========= Build 3D sphere distribution (golden spiral) ========= */
-const items = YEARS.map((y, i) => {
+/* ========= Build distribution: sphere (golden spiral) + “inner readable ring” ========= */
+const items = YEARS_FINAL.map((y, i) => {
   const el = document.createElement('div');
   el.className = 'year';
   el.textContent = y;
   cloud.appendChild(el);
 
-  // golden spiral on sphere
-  const n = YEARS.length;
-  const phi = Math.acos(1 - 2*(i + 0.5)/n);           // polar
-  const theta = Math.PI * (1 + Math.sqrt(5)) * i;    // azimuth (golden angle)
+  const n = YEARS_FINAL.length;
 
-  // unit sphere coords
-  const x = Math.cos(theta) * Math.sin(phi);
-  const yv = Math.sin(theta) * Math.sin(phi);
-  const z = Math.cos(phi);
+  // Golden spiral on sphere
+  const phi = Math.acos(1 - 2*(i + 0.5)/n);
+  const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+
+  const x0 = Math.cos(theta) * Math.sin(phi);
+  const y0 = Math.sin(theta) * Math.sin(phi);
+  const z0 = Math.cos(phi);
+
+  // Some items get "priority" (more readable, nearer the center orbit)
+  // ~28% will be readable "orbit" years
+  const priority = (Math.random() < 0.28);
 
   return {
     el,
-    // base position on unit sphere
-    x0: x,
-    y0: yv,
-    z0: z,
-    // tiny personal jitter to avoid perfect math look
-    j: (Math.random()*0.12 - 0.06),
-    // phase for breathing
-    ph: Math.random()*Math.PI*2
+    x0, y0, z0,
+    j: (Math.random()*0.10 - 0.05),
+    ph: Math.random()*Math.PI*2,
+    priority
   };
 });
 
-/* ========= Motion state ========= */
-let vortex = false;
-let vortexStart = 0;
+let vortex=false;
+let vortexStart=0;
 
-// slow global rotations (VERY slow drift)
-let rotY = 0;
-let rotX = 0;
+// super slow drift
+let rotY=0, rotX=0;
 
 // show ENTER after pause
 setTimeout(()=>{
-  enterBtn.style.opacity = '1';
-  enterBtn.style.pointerEvents = 'auto';
+  enterBtn.style.opacity='1';
+  enterBtn.style.pointerEvents='auto';
 }, 2200);
 
 enterBtn.addEventListener('click', ()=>{
   if(vortex) return;
-  vortex = true;
-  vortexStart = performance.now();
+  vortex=true;
+  vortexStart=performance.now();
 });
 
-/* ========= 3D helpers ========= */
 function rotateY(x,z,a){
   const ca=Math.cos(a), sa=Math.sin(a);
   return { x: x*ca + z*sa, z: -x*sa + z*ca };
@@ -290,83 +293,89 @@ function rotateX(y,z,a){
   return { y: y*ca - z*sa, z: y*sa + z*ca };
 }
 
-let last = performance.now();
+let last=performance.now();
 function tick(now){
-  const dt = (now - last) / 1000;
-  last = now;
+  const dt=(now-last)/1000;
+  last=now;
 
-  // center of intro text block (critical fix)
-  const rect = centerEl.getBoundingClientRect();
-  const cx = rect.left + rect.width/2;
-  const cy = rect.top + rect.height/2;
+  const rect=centerEl.getBoundingClientRect();
+  const cx=rect.left+rect.width/2;
+  const cy=rect.top+rect.height/2;
 
-  // cloud radius tied to screen (keeps it around text)
-  const minSide = Math.min(window.innerWidth, window.innerHeight);
-  const R = clamp(minSide * 0.22, 140, 260); // tighter & denser around text
+  const minSide=Math.min(window.innerWidth, window.innerHeight);
 
-  // progress for vortex
-  const p = vortex ? clamp((now - vortexStart)/1600, 0, 1) : 0;
-  const pe = easeInOutCubic(p);
+  // Main cloud radius (bigger because we have more dates)
+  const R = clamp(minSide * 0.26, 170, 300);
 
-  // base drift (super slow)
-  const baseRotSpeed = 0.14; // radians per second *very slow feel
-  rotY += baseRotSpeed * dt * 0.25;
-  rotX += baseRotSpeed * dt * 0.12;
+  // Priority orbit radius (a bit tighter and more readable)
+  const R2 = clamp(minSide * 0.20, 140, 240);
 
-  // in vortex: spin up hard
-  const spinBoost = vortex ? (1 + pe*10.0) : 1;
+  // vortex progress
+  const p=vortex ? clamp((now-vortexStart)/1600,0,1) : 0;
+  const pe=easeInOutCubic(p);
+
+  // global drift (slow)
+  const baseRot = 0.12; // rad/sec base
+  rotY += baseRot * dt * 0.22;
+  rotX += baseRot * dt * 0.10;
+
+  // vortex spin boost
+  const spinBoost = vortex ? (1 + pe*11.0) : 1;
   const aY = rotY * spinBoost;
   const aX = rotX * spinBoost;
 
-  items.forEach((it, i) => {
-    // start from sphere, add tiny jitter
-    let x = (it.x0 + it.j) * R;
-    let y = (it.y0 + it.j*0.7) * (R * 0.78);
-    let z = (it.z0 + it.j*0.5) * (R * 1.25);
+  items.forEach((it, i)=>{
+    // choose radius set
+    const baseRadius = it.priority ? R2 : R;
 
-    // subtle breathing makes it alive (small)
-    const breathe = Math.sin(now*0.00045 + it.ph) * 6;
-    x += (it.x0) * breathe;
-    y += (it.y0) * breathe;
+    // start from sphere coords
+    let x = (it.x0 + it.j) * baseRadius;
+    let y = (it.y0 + it.j*0.7) * (baseRadius * 0.78);
+    let z = (it.z0 + it.j*0.5) * (baseRadius * 1.35);
 
-    // rotate sphere slowly
-    let ry = rotateY(x, z, aY); x = ry.x; z = ry.z;
-    let rx = rotateX(y, z, aX); y = rx.y; z = rx.z;
+    // breathing
+    const breathe = Math.sin(now*0.00045 + it.ph) * (it.priority ? 5 : 7);
+    x += it.x0 * breathe;
+    y += it.y0 * breathe;
 
-    // vortex: collapse radius & shoot into camera
-    // collapse to center
+    // rotate
+    let ry=rotateY(x,z,aY); x=ry.x; z=ry.z;
+    let rx=rotateX(y,z,aX); y=rx.y; z=rx.z;
+
+    // vortex collapse + fly in Z
     const collapse = vortex ? (1 - pe) : 1;
     x *= collapse;
     y *= collapse;
-
-    // Z fly forward in vortex (camera hit)
-    const zFly = vortex ? (pe * (1150 + i*6)) : 0;
+    const zFly = vortex ? (pe * (1200 + i*3)) : 0;
     z += zFly;
 
-    // perspective-ish scaling by depth
-    // normalize z to 0..1 for opacity/scale
-    const zNorm = clamp((z + 260) / 900, 0, 1);
-    const scale = 0.78 + zNorm * 0.85;        // near bigger
-    const opacity = clamp(0.08 + zNorm * 0.52, 0.06, 0.62);
+    // readability by depth + priority
+    const zNorm = clamp((z + 320) / 980, 0, 1);
 
-    // blur only during vortex to imitate “into lens”
-    const blur = vortex ? (pe*2.0) : 0;
+    // priority items are more readable: bigger + more opaque + stronger glow
+    const scale = (it.priority ? 0.92 : 0.78) + zNorm * (it.priority ? 0.95 : 0.75);
+    const opacity = clamp((it.priority ? 0.18 : 0.07) + zNorm * (it.priority ? 0.55 : 0.35), 0.05, it.priority ? 0.78 : 0.48);
+
+    const blur = vortex ? (pe * (it.priority ? 1.6 : 2.2)) : 0;
 
     it.el.style.opacity = opacity.toFixed(3);
     it.el.style.filter = `blur(${blur}px)`;
+    it.el.style.textShadow = it.priority
+      ? '0 0 18px rgba(106,167,255,.18), 0 0 12px rgba(0,0,0,.55)'
+      : '0 0 14px rgba(0,0,0,.55)';
+
     it.el.style.transform =
       `translate3d(${cx + x}px, ${cy + y}px, ${z}px) translate(-50%,-50%) scale(${scale})`;
   });
 
-  // finish transition to map
-  if(vortex && p >= 1){
-    intro.style.opacity = '0';
+  if(vortex && p>=1){
+    intro.style.opacity='0';
     setTimeout(()=>{
-      intro.style.display = 'none';
-      wrap.style.opacity = '1';
-      wrap.style.pointerEvents = 'auto';
+      intro.style.display='none';
+      wrap.style.opacity='1';
+      wrap.style.pointerEvents='auto';
     }, 900);
-    vortex = false;
+    vortex=false;
     return;
   }
 
@@ -375,10 +384,10 @@ function tick(now){
 requestAnimationFrame(tick);
 
 /* ========= MAP PAN/ZOOM + DEMO SCENE ========= */
-const space = document.getElementById('space');
+const space=document.getElementById('space');
 let scale=1, mx=0, my=0, drag=false, sx=0, sy=0;
 
-function apply(){ space.style.transform = `translate(${mx}px, ${my}px) scale(${scale})`; }
+function apply(){ space.style.transform=`translate(${mx}px, ${my}px) scale(${scale})`; }
 
 wrap.addEventListener('mousedown', e=>{ drag=true; sx=e.clientX-mx; sy=e.clientY-my; });
 window.addEventListener('mouseup', ()=>drag=false);
@@ -393,9 +402,9 @@ wrap.addEventListener('wheel', e=>{
   apply();
 }, {passive:false});
 
-const scene = document.getElementById('scene');
-document.getElementById('demoNode').onclick = ()=> scene.style.display='flex';
-document.getElementById('closeScene').onclick = ()=> scene.style.display='none';
+const scene=document.getElementById('scene');
+document.getElementById('demoNode').onclick=()=>scene.style.display='flex';
+document.getElementById('closeScene').onclick=()=>scene.style.display='none';
 </script>
 
 </body>
