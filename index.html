@@ -99,7 +99,7 @@
     filter:none !important;
   }
 
-  /* Fade center content at vortex start (like reference) */
+  /* Fade center content at vortex start */
   .vortexing .intro-content{
     opacity:0;
     transform: translateY(-10px) scale(0.99);
@@ -173,7 +173,7 @@
   <div class="intro-content" id="center">
     <h1>Навчання — це подорож</h1>
     <p>Перед тобою історія курсу.<br>Це лише вступ. Далі — глибше.</p>
-    <button id="enterBtn">ENTER</button>
+    <button id="enterBtn">ПОЧАТИ</button>
   </div>
 </div>
 
@@ -193,7 +193,7 @@
   </div>
 </div>
 
-<div class="hint">ENTER → “занурення” → карта · На карті: перетягуй · Коліщатко — zoom</div>
+<div class="hint">ПОЧАТИ → “занурення” → карта · На карті: перетягуй · Коліщатко — zoom</div>
 
 <script>
 /* ===== Years (4-digit only) ===== */
@@ -207,19 +207,20 @@ const ORBIT_COUNT   = 56;
 const SAFE_RADIUS_K = 0.23;
 const ORBIT_RADIUS_K= 0.36;
 const FOG_RADIUS_K  = 0.52;
-const SPEED         = 0.050;
+const IDLE_ROT_SPEED= 0.018;   // повільний дрейф по колу
 
-/* ===== Vortex = like 100lostspecies: tunnel + fly PAST camera ===== */
-const VORTEX_MS        = 2800;   // longer = more “cinema”
-const VORTEX_TWIST     = 18.0;   // spiral turns
-const CAMERA_PUSH      = 1400;   // stronger forward camera
-const TUNNEL_TIGHTEN   = 0.22;   // ring compress a bit (tunnel)
-const PASS_Z           = 2200;   // how far they fly past camera
-const NEAR_FADE_START  = 220;    // when close to camera start fading
-const NEAR_FADE_RANGE  = 420;    // fade out fully within this distance
+/* ===== Transition = tunnel flight (less spin, more forward) ===== */
+const VORTEX_MS        = 2800;  // темп як у референсі (не різко)
+const SPIN_STRENGTH    = 2.2;   // ✅ було багато — тепер дуже спокійно
+const CAMERA_PUSH      = 1650;  // камера вперед (занурення)
+const CLOUD_ZOOM       = 0.22;  // легкий зум всієї хмари
+const TUNNEL_TIGHTEN   = 0.12;  // кільце трохи стискається (не в центр!)
+const PASS_Z           = 2400;  // наскільки далеко “пролітають”
+const NEAR_FADE_START  = 160;
+const NEAR_FADE_RANGE  = 520;
 
 /* ===== Performance ===== */
-const VORTEX_ACTIVE_RATIO = 0.60; // more immersion; reduce if FPS drops
+const VORTEX_ACTIVE_RATIO = 0.62;
 
 const cloud = document.getElementById('cloud');
 const stage = document.getElementById('stage');
@@ -247,11 +248,11 @@ enterBtn.addEventListener('click', ()=>{
   vortexStart=performance.now();
 
   stage.classList.add('vortex');
-  intro.classList.add('vortexing');   // fade title like reference
+  intro.classList.add('vortexing');
   enterBtn.style.pointerEvents='none';
 
-  // start darkening a bit later, like “cut to next scene”
-  setTimeout(()=>{ fadeOverlay.style.opacity = '0.55'; }, 1350);
+  // darken near the middle of transition
+  setTimeout(()=>{ fadeOverlay.style.opacity = '0.55'; }, 1400);
 });
 
 const items = YEARS.map((y,i)=>{
@@ -266,11 +267,14 @@ const items = YEARS.map((y,i)=>{
   return{
     el, orbit,
     a:a0,
-    s:(0.40+Math.random()*0.70)*(Math.random()<0.5?-1:1),
+    s:(0.45+Math.random()*0.55)*(Math.random()<0.5?-1:1),
     ph:Math.random()*Math.PI*2,
-    z0: orbit ? (-80+Math.random()*180) : (-380+Math.random()*520),
-    jx:(Math.random()*140-70),
-    jy:(Math.random()*100-50),
+    z0: orbit ? (-80+Math.random()*180) : (-420+Math.random()*620),
+    jx:(Math.random()*160-80),
+    jy:(Math.random()*120-60),
+    // slight personal drift to avoid “mechanical spin”
+    driftX:(Math.random()*2-1),
+    driftY:(Math.random()*2-1),
     lastX:0,lastY:0,lastZ:0,lastScale:1,lastOp:0.1
   };
 });
@@ -290,17 +294,18 @@ function tick(now){
   const minSide=Math.min(window.innerWidth, window.innerHeight);
   const SAFE = clamp(minSide*SAFE_RADIUS_K, 140, 240);
   const R_ORB = clamp(minSide*ORBIT_RADIUS_K, 280, 520);
-  const R_FOG = clamp(minSide*FOG_RADIUS_K, 420, 820);
+  const R_FOG = clamp(minSide*FOG_RADIUS_K, 420, 860);
 
   const p  = vortex ? clamp((now - vortexStart)/VORTEX_MS, 0, 1) : 0;
   const pe = easeInOutCubic(p);
 
-  // camera forward + slight zoom for immersion
+  // camera forward + gentle zoom (immersion)
   const cameraZ = vortex ? (pe * CAMERA_PUSH) : 0;
-  const cloudZoom = vortex ? (1 + pe*0.28) : 1;
+  const cloudZoom = vortex ? (1 + pe*CLOUD_ZOOM) : 1;
   cloud.style.transform = `translateZ(0) scale(${cloudZoom})`;
 
-  rot += SPEED*dt*0.22;
+  // slow idle rotation
+  rot += IDLE_ROT_SPEED * dt;
 
   items.forEach((it,idx)=>{
     const vortexActive = !vortex || vortexActiveSet.has(idx);
@@ -312,12 +317,12 @@ function tick(now){
       return;
     }
 
-    it.a += (SPEED*0.35)*dt*it.s;
+    // gentle angular drift
+    it.a += (IDLE_ROT_SPEED*0.85)*dt*it.s;
 
-    // spiral that ramps up strongly near the end
-    const twist = vortex ? (pe * VORTEX_TWIST) : 0;
-    const ramp = vortex ? smoothstep(0.15, 0.95, pe) : 0;
-    const a = it.a + rot + twist * ramp * (0.35 + idx * 0.014);
+    // ✅ SPIN reduced: no crazy spiral; tiny extra spin only
+    const spinRamp = vortex ? smoothstep(0.10, 0.95, pe) : 0;
+    const a = it.a + rot + (spinRamp * SPIN_STRENGTH) * (0.25 + idx*0.001);
 
     let r = it.orbit ? R_ORB : R_FOG;
 
@@ -325,20 +330,23 @@ function tick(now){
     let x = Math.cos(a) * (r + breathe);
     let y = Math.sin(a) * (r + breathe) * 0.70;
 
+    // small “organic” drift (reference vibe)
+    x += Math.sin(now*0.00020 + it.ph) * (it.orbit ? 6 : 10) * it.driftX;
+    y += Math.cos(now*0.00018 + it.ph) * (it.orbit ? 5 : 9)  * it.driftY;
+
     if(!it.orbit){
       x += Math.sin(now*0.00017 + it.ph) * 30 + it.jx*0.10;
       y += Math.cos(now*0.00015 + it.ph) * 20 + it.jy*0.10;
     }
 
-    // keep center clean (even during vortex)
+    // keep center clean
     const dist = Math.hypot(x,y);
     if(dist < SAFE){
       const k = SAFE / Math.max(1, dist);
       x *= k; y *= k;
     }
 
-    // IMPORTANT: during vortex we DO NOT pull into center text.
-    // We create a tunnel: slightly tighten ring, not collapse.
+    // tunnel tighten (slight), not collapse to text
     if(vortex){
       const tighten = 1 - (pe * TUNNEL_TIGHTEN);
       x *= tighten;
@@ -347,12 +355,11 @@ function tick(now){
 
     const zIdle = it.z0 + Math.sin(now*0.00031 + it.ph) * (it.orbit ? 18 : 34);
 
-    // Fly past camera:
-    // start behind, rush forward, go beyond, then fade out
-    const zFly = vortex ? (pe * (PASS_Z + idx*2.2)) : 0;
+    // fly past camera
+    const zFly = vortex ? (pe * (PASS_Z + idx*1.6)) : 0;
     const z = zIdle + zFly - cameraZ;
 
-    const zNorm = clamp((z + 420)/1500, 0, 1);
+    const zNorm = clamp((z + 420)/1600, 0, 1);
 
     // Do not change font-size during vortex (perf)
     if(!vortex){
@@ -364,20 +371,18 @@ function tick(now){
       it.el.style.filter = 'none';
     }
 
-    // As they approach camera, they should feel bigger
+    // near boost = feels like passing by
     const scaleBase = it.orbit ? (1.00 + zNorm*0.70) : (0.78 + zNorm*0.52);
-    const nearBoost = vortex ? (1 + smoothstep(0.55, 0.95, pe) * 0.35) : 1;
+    const nearBoost = vortex ? (1 + smoothstep(0.55, 0.96, pe) * 0.40) : 1;
     const scale = scaleBase * nearBoost;
 
-    // opacity with "near fade" when too close to camera (so they pass by)
+    // fade near camera plane
     const baseOp = it.orbit
       ? clamp(0.30 + zNorm*0.55, 0.18, 0.88)
       : clamp(0.04 + zNorm*0.24, 0.02, 0.32);
 
     let op = baseOp;
-
     if(vortex){
-      // fade when z becomes very close/positive (camera plane)
       const t = clamp((z - NEAR_FADE_START)/NEAR_FADE_RANGE, 0, 1);
       op *= (1 - t);
     }
@@ -394,7 +399,6 @@ function tick(now){
   });
 
   if(vortex && p>=1){
-    // finalize transition
     stage.classList.remove('vortex');
     fadeOverlay.style.opacity = '1';
 
@@ -404,7 +408,7 @@ function tick(now){
         intro.style.display='none';
         wrap.style.opacity='1';
         wrap.style.pointerEvents='auto';
-        fadeOverlay.style.opacity = '0'; // reveal map
+        fadeOverlay.style.opacity = '0';
       }, 420);
     }, 60);
 
