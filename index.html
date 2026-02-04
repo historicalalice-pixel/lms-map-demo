@@ -6,154 +6,201 @@
 <title>LMS Map — Demo</title>
 
 <style>
-/* RESET */
-*{box-sizing:border-box}
-html,body{
-  margin:0;
-  padding:0;
-  height:100%;
-  background:#05070d;
-  color:#e8eefc;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto;
-  overflow:hidden;
-}
+  /* RESET */
+  *{box-sizing:border-box}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:#05070d; color:#e8eefc;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto;
+    overflow:hidden;
+  }
 
-/* ================= ENTRY ================= */
-#intro{
-  position:fixed;
-  inset:0;
-  background:
-    radial-gradient(1200px 600px at 50% 40%, rgba(106,167,255,.12), transparent 55%),
-    #05070d;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:10;
-  transition:opacity 1.2s ease;
-}
+  /* ================= ENTRY ================= */
+  #intro{
+    position:fixed; inset:0;
+    background:
+      radial-gradient(1200px 700px at 50% 40%, rgba(106,167,255,.10), transparent 55%),
+      radial-gradient(900px 600px at 70% 70%, rgba(120,255,204,.06), transparent 50%),
+      #05070d;
+    display:flex; align-items:center; justify-content:center;
+    z-index:10;
+    transition:opacity 1.2s ease;
+  }
 
-.intro-content{
-  text-align:center;
-  max-width:720px;
-  position:relative;
-  z-index:2;
-}
+  /* 3D stage */
+  #stage{
+    position:absolute; inset:0;
+    perspective: 900px;
+    transform-style:preserve-3d;
+    overflow:hidden;
+  }
 
-.intro-content h1{
-  font-size:46px;
-  font-weight:500;
-  margin-bottom:16px;
-}
+  /* center copy */
+  .intro-content{
+    position:relative;
+    z-index:3;
+    text-align:center;
+    max-width:820px;
+    padding:20px;
+    transform: translateZ(0);
+    pointer-events:none; /* so bubbles don't steal clicks */
+  }
+  .intro-content h1{
+    font-size:46px;
+    font-weight:600;
+    margin:0 0 14px;
+    letter-spacing:.02em;
+  }
+  .intro-content p{
+    margin:0 0 32px;
+    opacity:.72;
+    line-height:1.6;
+  }
 
-.intro-content p{
-  opacity:.7;
-  line-height:1.6;
-  margin-bottom:48px;
-}
+  /* ENTER */
+  #enterBtn{
+    pointer-events:auto;
+    opacity:0;
+    padding:12px 30px;
+    background:transparent;
+    border:1px solid rgba(255,255,255,.35);
+    color:#e8eefc;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    cursor:pointer;
+    transition:opacity 1.2s ease, border-color .3s ease, transform .25s ease;
+  }
+  #enterBtn:hover{
+    border-color:#fff;
+    transform:translateY(-1px);
+  }
 
-/* ENTER */
-.enter-btn{
-  opacity:0;
-  pointer-events:none;
-  padding:12px 30px;
-  background:transparent;
-  border:1px solid rgba(255,255,255,.35);
-  color:#e8eefc;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  cursor:pointer;
-  transition:opacity 1.2s ease, border-color .3s ease;
-}
-.enter-btn:hover{border-color:#fff}
+  /* ====== Bubble clusters ====== */
+  #bubbles{
+    position:absolute; inset:0;
+    z-index:2;
+    transform-style:preserve-3d;
+  }
 
-/* ================= FLOATING DATES ================= */
-#dates{
-  position:absolute;
-  inset:0;
-  pointer-events:none;
-  z-index:1;
-}
+  .bubble{
+    position:absolute;
+    left:50%; top:50%;
+    width: 210px; height: 210px;
+    margin-left:-105px; margin-top:-105px;
+    border-radius:50%;
+    border:1px solid rgba(255,255,255,.14);
+    background: radial-gradient(120px 120px at 30% 30%, rgba(255,255,255,.05), transparent 65%);
+    box-shadow:
+      0 0 40px rgba(106,167,255,.10),
+      inset 0 0 18px rgba(255,255,255,.05);
+    backdrop-filter: blur(2px);
+    transform-style:preserve-3d;
+    will-change: transform, opacity, filter;
+    opacity:.95;
+  }
 
-.date{
-  position:absolute;
-  font-size:12px;
-  opacity:.25;
-  white-space:nowrap;
-  transform-origin:center;
-}
+  /* inner ring effect (subtle) */
+  .bubble::after{
+    content:"";
+    position:absolute; inset:14px;
+    border-radius:50%;
+    border:1px dashed rgba(255,255,255,.08);
+    opacity:.5;
+  }
 
-/* ================= MAP ================= */
-#wrap{
-  position:fixed;
-  inset:0;
-  opacity:0;
-  pointer-events:none;
-  transition:opacity 1s ease;
-}
+  .bubble .dates{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:22px;
+    text-align:center;
+    gap:10px;
+    flex-wrap:wrap;
+    align-content:center;
+  }
 
-#space{
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:3000px;
-  height:2000px;
-  transform:translate(-50%,-50%) scale(1);
-  background:
-    radial-gradient(800px 400px at 30% 30%, rgba(106,167,255,.15), transparent 50%),
-    radial-gradient(700px 500px at 70% 60%, rgba(120,255,204,.10), transparent 45%);
-}
+  .bubble .d{
+    font-size:12px;
+    opacity:.33;
+    letter-spacing:.06em;
+    white-space:nowrap;
+  }
 
-.node{
-  position:absolute;
-  left:50%;
-  top:50%;
-  transform:translate(-50%,-50%);
-  width:28px;
-  height:28px;
-  border-radius:50%;
-  background:#6aa7ff;
-  box-shadow:0 0 24px rgba(106,167,255,.6);
-  cursor:pointer;
-}
-.label{
-  position:absolute;
-  top:36px;
-  left:50%;
-  transform:translateX(-50%);
-  font-size:12px;
-  opacity:.85;
-}
+  /* little shimmer */
+  @keyframes shimmer{
+    0%,100%{opacity:.20}
+    50%{opacity:.42}
+  }
+  .bubble .d:nth-child(3n){ animation: shimmer 4.2s infinite ease-in-out; }
+  .bubble .d:nth-child(4n){ animation: shimmer 5.6s infinite ease-in-out; }
 
-/* ================= DEMO SCENE ================= */
-#scene{
-  position:fixed;
-  inset:0;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  background:#05070d;
-  z-index:20;
-}
+  /* ================= MAP ================= */
+  #wrap{
+    position:fixed; inset:0;
+    opacity:0; pointer-events:none;
+    transition:opacity 1s ease;
+    z-index:1;
+  }
+  #space{
+    position:absolute;
+    left:50%; top:50%;
+    width:3000px; height:2000px;
+    transform:translate(-50%,-50%) scale(1);
+    background:
+      radial-gradient(800px 400px at 30% 30%, rgba(106,167,255,.15), transparent 50%),
+      radial-gradient(700px 500px at 70% 60%, rgba(120,255,204,.10), transparent 45%);
+  }
+  .node{
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    width:28px; height:28px; border-radius:50%;
+    background:#6aa7ff;
+    box-shadow:0 0 24px rgba(106,167,255,.6);
+    cursor:pointer;
+  }
+  .label{
+    position:absolute; top:36px; left:50%;
+    transform:translateX(-50%);
+    font-size:12px; opacity:.85;
+    white-space:nowrap;
+  }
 
-.card{
-  max-width:720px;
-  padding:28px;
-  border-radius:18px;
-  border:1px solid rgba(255,255,255,.15);
-  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  text-align:center;
-}
+  /* ================= DEMO SCENE ================= */
+  #scene{
+    position:fixed; inset:0;
+    display:none; align-items:center; justify-content:center;
+    background:#05070d;
+    z-index:20;
+  }
+  .card{
+    max-width:720px;
+    padding:28px;
+    border-radius:18px;
+    border:1px solid rgba(255,255,255,.15);
+    background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+    text-align:center;
+  }
+  .card h2{margin:0 0 12px}
+  .card p{opacity:.85;line-height:1.6;margin:0}
+  .close-btn{
+    margin-top:24px;
+    padding:10px 22px;
+    background:transparent;
+    border:1px solid rgba(255,255,255,.35);
+    color:#e8eefc;
+    cursor:pointer;
+  }
 
-.card p{opacity:.85;line-height:1.6}
+  .hint{
+    position:fixed;
+    left:16px; bottom:16px;
+    font-size:12px; opacity:.6;
+    z-index:5;
+  }
 
-.close-btn{
-  margin-top:24px;
-  padding:10px 22px;
-  background:transparent;
-  border:1px solid rgba(255,255,255,.35);
-  color:#e8eefc;
-  cursor:pointer;
-}
+  /* Reduce motion accessibility */
+  @media (prefers-reduced-motion: reduce){
+    .bubble .d{animation:none !important}
+  }
 </style>
 </head>
 
@@ -161,15 +208,14 @@ html,body{
 
 <!-- INTRO -->
 <div id="intro">
-  <div id="dates"></div>
+  <div id="stage">
+    <div id="bubbles"></div>
+  </div>
 
   <div class="intro-content">
     <h1>Навчання — це подорож</h1>
-    <p>
-      Перед тобою історія курсу.<br>
-      Це лише вступ. Далі — глибше.
-    </p>
-    <button id="enterBtn" class="enter-btn">Enter</button>
+    <p>Перед тобою історія курсу.<br>Це лише вступ. Далі — глибше.</p>
+    <button id="enterBtn">ENTER</button>
   </div>
 </div>
 
@@ -186,94 +232,188 @@ html,body{
 <div id="scene">
   <div class="card">
     <h2>Демо-урок</h2>
-    <p>
-      Це приклад формату навчання.<br>
-      Повний шлях відкривається після входу.
-    </p>
+    <p>Це приклад формату навчання.<br>Повний шлях відкривається після входу.</p>
     <button class="close-btn" id="closeScene">Повернутись</button>
   </div>
 </div>
 
+<div class="hint">Після ENTER: карта · На карті: перетягуй мишкою · Коліщатко — zoom</div>
+
 <script>
-/* ========== FLOATING DATES ========== */
-const datesContainer = document.getElementById('dates');
-const years = Array.from({length:30},(_,i)=> (1990+i).toString());
+/* =========================
+   1) BUILD 30 DATES → BUBBLES
+========================= */
+const bubblesRoot = document.getElementById('bubbles');
+const enterBtn = document.getElementById('enterBtn');
+const intro = document.getElementById('intro');
+const wrap = document.getElementById('wrap');
 
-const floating = years.map(y=>{
-  const el = document.createElement('div');
-  el.className='date';
-  el.textContent=y;
-  datesContainer.appendChild(el);
+const years = Array.from({length:30}, (_,i)=> String(1990+i)); // placeholder (потім замінимо на “дати подій”)
+const GROUPS = 6; // 6 bubbles
+const PER = Math.ceil(years.length / GROUPS); // 5 per bubble
 
-  const obj={
-    el,
-    x:Math.random()*100,
-    y:Math.random()*100,
-    vx:(Math.random()-.5)*0.005,
-    vy:(Math.random()-.5)*0.005,
-    r:(Math.random()-.5)*0.02
+function chunk(arr, size){
+  const out=[];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out;
+}
+
+const groups = chunk(years, PER).slice(0, GROUPS);
+
+const bubbles = groups.map((list, idx) => {
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  const dates = document.createElement('div');
+  dates.className = 'dates';
+  list.forEach(t=>{
+    const s=document.createElement('div');
+    s.className='d';
+    s.textContent=t;
+    dates.appendChild(s);
+  });
+  b.appendChild(dates);
+  bubblesRoot.appendChild(b);
+
+  // motion params
+  const baseR = 260 + (idx % 3) * 70;      // ring radius variation
+  const baseA = (idx / GROUPS) * Math.PI*2; // start angle
+  const speed = (0.0006 + Math.random()*0.0005) * (idx%2?1:-1); // drift speed
+  const wob = 18 + Math.random()*18;       // small wobble radius
+  const wobS = 0.001 + Math.random()*0.0015;
+  const tilt = (Math.random()*10-5);       // deg
+  const z0 = -120 - Math.random()*180;     // start behind
+  return {
+    el: b,
+    baseR, baseA, a: baseA,
+    speed,
+    wob, wobS, wobP: Math.random()*Math.PI*2,
+    tilt,
+    z: z0,
+    phase: Math.random()*Math.PI*2
   };
-  return obj;
 });
 
-function animateDates(){
-  floating.forEach(d=>{
-    d.x+=d.vx;
-    d.y+=d.vy;
-    if(d.x<0||d.x>100)d.vx*=-1;
-    if(d.y<0||d.y>100)d.vy*=-1;
-    d.el.style.left=d.x+'%';
-    d.el.style.top=d.y+'%';
-    d.el.style.transform=`rotate(${d.r*100}deg)`;
-  });
-  requestAnimationFrame(animateDates);
+/* =========================
+   2) IDLE ORBIT (CIRCULAR DRIFT)
+========================= */
+let t0 = performance.now();
+let vortex = false;
+let vortexStart = 0;
+
+function easeInOutCubic(x){
+  return x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
 }
-animateDates();
 
-/* ========== ENTER LOGIC ========== */
-const enterBtn=document.getElementById('enterBtn');
-const intro=document.getElementById('intro');
-const wrap=document.getElementById('wrap');
+function render(now){
+  const dt = now - t0;
+  t0 = now;
 
+  // vortex progress
+  let p = 0;
+  if(vortex){
+    p = Math.min(1, (now - vortexStart) / 1600); // 1.6s
+  }
+  const pe = easeInOutCubic(p);
+
+  const cx = window.innerWidth/2;
+  const cy = window.innerHeight/2;
+
+  bubbles.forEach((b, i)=>{
+    // idle orbit
+    b.a += b.speed * dt;
+    b.wobP += b.wobS * dt;
+
+    // orbit radius shrink + spin-up in vortex
+    const spinBoost = vortex ? (1 + pe*8) : 1;
+    const a = b.a * spinBoost;
+
+    const wobR = b.wob * Math.sin(b.wobP);
+    const rIdle = b.baseR + wobR;
+
+    // During vortex: radius → 0
+    const r = vortex ? rIdle * (1 - pe) : rIdle;
+
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r * 0.72; // ellipse a bit (cinematic)
+
+    // Depth: in vortex, objects fly into camera (Z increases)
+    // Start behind (-) → shoot forward (+)
+    const z = vortex
+      ? (-180 + i*14) + pe * (1200 + i*40)
+      : b.z + Math.sin(now*0.0007 + b.phase)*18;
+
+    // Scale: based on depth
+    const s = 1 + Math.max(0, z) / 700;
+
+    // Fade + blur as they approach camera (gives “whirl into lens”)
+    const opacity = vortex ? (1 - pe*0.55) : 0.95;
+    const blur = vortex ? (pe*2.2) : 0;
+
+    b.el.style.opacity = opacity.toFixed(3);
+    b.el.style.filter = `blur(${blur}px)`;
+
+    // Subtle tilt + extra rotation in vortex
+    const rot = b.tilt + (vortex ? pe*220 : 0);
+
+    b.el.style.transform =
+      `translate3d(${cx + x - 105}px, ${cy + y - 105}px, ${z}px) rotate(${rot}deg) scale(${s})`;
+  });
+
+  // intro fades at the end
+  if(vortex && p >= 1){
+    intro.style.opacity = '0';
+    setTimeout(()=>{
+      intro.style.display = 'none';
+      wrap.style.opacity = '1';
+      wrap.style.pointerEvents = 'auto';
+    }, 900);
+    vortex = false; // stop repeating
+  } else {
+    requestAnimationFrame(render);
+  }
+}
+
+/* show ENTER after pause */
 setTimeout(()=>{
-  enterBtn.style.opacity='1';
-  enterBtn.style.pointerEvents='auto';
-},2400);
+  enterBtn.style.opacity = '1';
+  enterBtn.style.pointerEvents = 'auto';
+}, 2200);
 
-enterBtn.onclick=()=>{
-  intro.style.opacity='0';
-  setTimeout(()=>{
-    intro.style.display='none';
-    wrap.style.opacity='1';
-    wrap.style.pointerEvents='auto';
-  },1200);
-};
+/* trigger vortex */
+enterBtn.addEventListener('click', ()=>{
+  if(vortex) return;
+  vortex = true;
+  vortexStart = performance.now();
+});
 
-/* ========== MAP PAN / ZOOM ========== */
-const space=document.getElementById('space');
-let scale=1,x=0,y=0,drag=false,sx=0,sy=0;
+/* start animation loop */
+requestAnimationFrame(render);
 
-function apply(){space.style.transform=`translate(${x}px,${y}px) scale(${scale})`;}
+/* =========================
+   3) MAP PAN/ZOOM + DEMO SCENE
+========================= */
+const space = document.getElementById('space');
+let scale=1, x=0, y=0, drag=false, sx=0, sy=0;
 
-wrap.onmousedown=e=>{drag=true;sx=e.clientX-x;sy=e.clientY-y;}
-window.onmouseup=()=>drag=false;
-window.onmousemove=e=>{
-  if(!drag)return;
-  x=e.clientX-sx;
-  y=e.clientY-sy;
-  apply();
-};
-wrap.onwheel=e=>{
+function apply(){ space.style.transform = `translate(${x}px, ${y}px) scale(${scale})`; }
+
+wrap.addEventListener('mousedown', e=>{ drag=true; sx=e.clientX-x; sy=e.clientY-y; });
+window.addEventListener('mouseup', ()=>drag=false);
+window.addEventListener('mousemove', e=>{
+  if(!drag) return;
+  x=e.clientX-sx; y=e.clientY-sy; apply();
+});
+wrap.addEventListener('wheel', e=>{
   e.preventDefault();
-  scale*=e.deltaY>0?0.9:1.1;
-  scale=Math.max(.4,Math.min(2.5,scale));
+  scale *= e.deltaY>0 ? 0.9 : 1.1;
+  scale = Math.max(0.4, Math.min(2.5, scale));
   apply();
-};
+}, {passive:false});
 
-/* ========== DEMO SCENE ========== */
-const scene=document.getElementById('scene');
-document.getElementById('demoNode').onclick=()=>scene.style.display='flex';
-document.getElementById('closeScene').onclick=()=>scene.style.display='none';
+/* demo scene */
+const scene = document.getElementById('scene');
+document.getElementById('demoNode').onclick = ()=> scene.style.display='flex';
+document.getElementById('closeScene').onclick = ()=> scene.style.display='none';
 </script>
 
 </body>
