@@ -1,269 +1,280 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LMS Map — Demo</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LMS Map — Demo</title>
 
-  <style>
-    /* RESET */
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      background: #05070d;
-      color: #e8eefc;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto;
-      overflow: hidden;
-    }
+<style>
+/* RESET */
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  padding:0;
+  height:100%;
+  background:#05070d;
+  color:#e8eefc;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto;
+  overflow:hidden;
+}
 
-    /* =====================
-       ENTRY / INTRO
-    ====================== */
-    #intro {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background:
-        radial-gradient(1200px 600px at 50% 40%, rgba(106,167,255,.12), transparent 55%),
-        #05070d;
-      z-index: 10;
-      transition: opacity 1s ease;
-    }
+/* ================= ENTRY ================= */
+#intro{
+  position:fixed;
+  inset:0;
+  background:
+    radial-gradient(1200px 600px at 50% 40%, rgba(106,167,255,.12), transparent 55%),
+    #05070d;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:10;
+  transition:opacity 1.2s ease;
+}
 
-    .intro-content {
-      text-align: center;
-      max-width: 640px;
-      padding: 20px;
-    }
+.intro-content{
+  text-align:center;
+  max-width:720px;
+  position:relative;
+  z-index:2;
+}
 
-    .intro-content h1 {
-      font-size: 46px;
-      font-weight: 500;
-      margin-bottom: 18px;
-    }
+.intro-content h1{
+  font-size:46px;
+  font-weight:500;
+  margin-bottom:16px;
+}
 
-    .intro-content p {
-      opacity: .75;
-      line-height: 1.6;
-      margin-bottom: 42px;
-    }
+.intro-content p{
+  opacity:.7;
+  line-height:1.6;
+  margin-bottom:48px;
+}
 
-    .enter-btn {
-      opacity: 0;
-      pointer-events: none;
-      padding: 12px 28px;
-      font-size: 14px;
-      letter-spacing: .14em;
-      text-transform: uppercase;
-      background: transparent;
-      color: #e8eefc;
-      border: 1px solid rgba(255,255,255,.35);
-      cursor: pointer;
-      transition: opacity 1.2s ease, border-color .3s ease;
-    }
+/* ENTER */
+.enter-btn{
+  opacity:0;
+  pointer-events:none;
+  padding:12px 30px;
+  background:transparent;
+  border:1px solid rgba(255,255,255,.35);
+  color:#e8eefc;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:opacity 1.2s ease, border-color .3s ease;
+}
+.enter-btn:hover{border-color:#fff}
 
-    .enter-btn:hover {
-      border-color: #fff;
-    }
+/* ================= FLOATING DATES ================= */
+#dates{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index:1;
+}
 
-    /* =====================
-       MAP SPACE
-    ====================== */
-    #wrap {
-      position: fixed;
-      inset: 0;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 1s ease;
-    }
+.date{
+  position:absolute;
+  font-size:12px;
+  opacity:.25;
+  white-space:nowrap;
+  transform-origin:center;
+}
 
-    #space {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 3000px;
-      height: 2000px;
-      transform: translate(-50%, -50%) scale(1);
-      background:
-        radial-gradient(800px 400px at 30% 30%, rgba(106,167,255,.15), transparent 50%),
-        radial-gradient(700px 500px at 70% 60%, rgba(120,255,204,.10), transparent 45%);
-    }
+/* ================= MAP ================= */
+#wrap{
+  position:fixed;
+  inset:0;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 1s ease;
+}
 
-    .node {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: #6aa7ff;
-      box-shadow: 0 0 24px rgba(106,167,255,.6);
-      cursor: pointer;
-    }
+#space{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:3000px;
+  height:2000px;
+  transform:translate(-50%,-50%) scale(1);
+  background:
+    radial-gradient(800px 400px at 30% 30%, rgba(106,167,255,.15), transparent 50%),
+    radial-gradient(700px 500px at 70% 60%, rgba(120,255,204,.10), transparent 45%);
+}
 
-    .label {
-      position: absolute;
-      top: 36px;
-      left: 50%;
-      transform: translateX(-50%);
-      white-space: nowrap;
-      font-size: 12px;
-      opacity: .85;
-    }
+.node{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  background:#6aa7ff;
+  box-shadow:0 0 24px rgba(106,167,255,.6);
+  cursor:pointer;
+}
+.label{
+  position:absolute;
+  top:36px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:12px;
+  opacity:.85;
+}
 
-    /* =====================
-       DEMO SCENE
-    ====================== */
-    #scene {
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      background: #05070d;
-      z-index: 20;
-    }
+/* ================= DEMO SCENE ================= */
+#scene{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:#05070d;
+  z-index:20;
+}
 
-    .card {
-      max-width: 720px;
-      padding: 28px;
-      border-radius: 18px;
-      border: 1px solid rgba(255,255,255,.15);
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-      text-align: center;
-    }
+.card{
+  max-width:720px;
+  padding:28px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.15);
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  text-align:center;
+}
 
-    .card h2 {
-      margin-top: 0;
-      margin-bottom: 12px;
-    }
+.card p{opacity:.85;line-height:1.6}
 
-    .card p {
-      opacity: .85;
-      line-height: 1.6;
-    }
-
-    .close-btn {
-      margin-top: 24px;
-      padding: 10px 22px;
-      background: transparent;
-      border: 1px solid rgba(255,255,255,.35);
-      color: #e8eefc;
-      cursor: pointer;
-    }
-
-    .hint {
-      position: fixed;
-      left: 16px;
-      bottom: 16px;
-      font-size: 12px;
-      opacity: .6;
-    }
-  </style>
+.close-btn{
+  margin-top:24px;
+  padding:10px 22px;
+  background:transparent;
+  border:1px solid rgba(255,255,255,.35);
+  color:#e8eefc;
+  cursor:pointer;
+}
+</style>
 </head>
 
 <body>
 
-  <!-- INTRO -->
-  <div id="intro">
-    <div class="intro-content">
-      <h1>Навчання — це подорож</h1>
-      <p>
-        Перед тобою історія курсу.<br>
-        Це лише вступ. Далі — глибше.
-      </p>
-      <button id="enterBtn" class="enter-btn">Enter</button>
+<!-- INTRO -->
+<div id="intro">
+  <div id="dates"></div>
+
+  <div class="intro-content">
+    <h1>Навчання — це подорож</h1>
+    <p>
+      Перед тобою історія курсу.<br>
+      Це лише вступ. Далі — глибше.
+    </p>
+    <button id="enterBtn" class="enter-btn">Enter</button>
+  </div>
+</div>
+
+<!-- MAP -->
+<div id="wrap">
+  <div id="space">
+    <div class="node" id="demoNode">
+      <div class="label">Демо-урок</div>
     </div>
   </div>
+</div>
 
-  <!-- MAP -->
-  <div id="wrap">
-    <div id="space">
-      <div class="node" id="demoNode">
-        <div class="label">Демо-урок</div>
-      </div>
-    </div>
+<!-- DEMO SCENE -->
+<div id="scene">
+  <div class="card">
+    <h2>Демо-урок</h2>
+    <p>
+      Це приклад формату навчання.<br>
+      Повний шлях відкривається після входу.
+    </p>
+    <button class="close-btn" id="closeScene">Повернутись</button>
   </div>
+</div>
 
-  <!-- DEMO SCENE -->
-  <div id="scene">
-    <div class="card">
-      <h2>Демо-урок</h2>
-      <p>
-        Це приклад того, як виглядатиме навчання.<br>
-        Повний доступ відкривається після входу.
-      </p>
-      <button class="close-btn" id="closeScene">Повернутись</button>
-    </div>
-  </div>
+<script>
+/* ========== FLOATING DATES ========== */
+const datesContainer = document.getElementById('dates');
+const years = Array.from({length:30},(_,i)=> (1990+i).toString());
 
-  <div class="hint">Перетягуй мишкою · Коліщатко — zoom</div>
+const floating = years.map(y=>{
+  const el = document.createElement('div');
+  el.className='date';
+  el.textContent=y;
+  datesContainer.appendChild(el);
 
-  <script>
-    /* ENTRY TIMING */
-    const enterBtn = document.getElementById('enterBtn');
-    const intro = document.getElementById('intro');
-    const wrap = document.getElementById('wrap');
+  const obj={
+    el,
+    x:Math.random()*100,
+    y:Math.random()*100,
+    vx:(Math.random()-.5)*0.005,
+    vy:(Math.random()-.5)*0.005,
+    r:(Math.random()-.5)*0.02
+  };
+  return obj;
+});
 
-    setTimeout(() => {
-      enterBtn.style.opacity = '1';
-      enterBtn.style.pointerEvents = 'auto';
-    }, 2200);
+function animateDates(){
+  floating.forEach(d=>{
+    d.x+=d.vx;
+    d.y+=d.vy;
+    if(d.x<0||d.x>100)d.vx*=-1;
+    if(d.y<0||d.y>100)d.vy*=-1;
+    d.el.style.left=d.x+'%';
+    d.el.style.top=d.y+'%';
+    d.el.style.transform=`rotate(${d.r*100}deg)`;
+  });
+  requestAnimationFrame(animateDates);
+}
+animateDates();
 
-    enterBtn.addEventListener('click', () => {
-      intro.style.opacity = '0';
-      setTimeout(() => {
-        intro.style.display = 'none';
-        wrap.style.opacity = '1';
-        wrap.style.pointerEvents = 'auto';
-      }, 1000);
-    });
+/* ========== ENTER LOGIC ========== */
+const enterBtn=document.getElementById('enterBtn');
+const intro=document.getElementById('intro');
+const wrap=document.getElementById('wrap');
 
-    /* MAP PAN / ZOOM */
-    const space = document.getElementById('space');
-    let scale = 1, x = 0, y = 0;
-    let dragging = false, sx = 0, sy = 0;
+setTimeout(()=>{
+  enterBtn.style.opacity='1';
+  enterBtn.style.pointerEvents='auto';
+},2400);
 
-    function applyTransform() {
-      space.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
-    }
+enterBtn.onclick=()=>{
+  intro.style.opacity='0';
+  setTimeout(()=>{
+    intro.style.display='none';
+    wrap.style.opacity='1';
+    wrap.style.pointerEvents='auto';
+  },1200);
+};
 
-    wrap.addEventListener('mousedown', e => {
-      dragging = true;
-      sx = e.clientX - x;
-      sy = e.clientY - y;
-    });
+/* ========== MAP PAN / ZOOM ========== */
+const space=document.getElementById('space');
+let scale=1,x=0,y=0,drag=false,sx=0,sy=0;
 
-    window.addEventListener('mouseup', () => dragging = false);
+function apply(){space.style.transform=`translate(${x}px,${y}px) scale(${scale})`;}
 
-    window.addEventListener('mousemove', e => {
-      if (!dragging) return;
-      x = e.clientX - sx;
-      y = e.clientY - sy;
-      applyTransform();
-    });
+wrap.onmousedown=e=>{drag=true;sx=e.clientX-x;sy=e.clientY-y;}
+window.onmouseup=()=>drag=false;
+window.onmousemove=e=>{
+  if(!drag)return;
+  x=e.clientX-sx;
+  y=e.clientY-sy;
+  apply();
+};
+wrap.onwheel=e=>{
+  e.preventDefault();
+  scale*=e.deltaY>0?0.9:1.1;
+  scale=Math.max(.4,Math.min(2.5,scale));
+  apply();
+};
 
-    wrap.addEventListener('wheel', e => {
-      e.preventDefault();
-      scale *= e.deltaY > 0 ? 0.9 : 1.1;
-      scale = Math.min(2.5, Math.max(0.4, scale));
-      applyTransform();
-    }, { passive: false });
-
-    /* DEMO SCENE */
-    const scene = document.getElementById('scene');
-    document.getElementById('demoNode').onclick = () => {
-      scene.style.display = 'flex';
-    };
-    document.getElementById('closeScene').onclick = () => {
-      scene.style.display = 'none';
-    };
-  </script>
+/* ========== DEMO SCENE ========== */
+const scene=document.getElementById('scene');
+document.getElementById('demoNode').onclick=()=>scene.style.display='flex';
+document.getElementById('closeScene').onclick=()=>scene.style.display='none';
+</script>
 
 </body>
 </html>
