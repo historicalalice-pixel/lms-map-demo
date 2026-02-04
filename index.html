@@ -6,7 +6,7 @@
 <title>LMS — Intro</title>
 
 <style>
-  /* Fonts (close to 100lostspecies vibe: elegant serif + clean sans) */
+  /* близько до вайбу 100lostspecies: елегантний serif + clean sans */
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
 
   *{box-sizing:border-box}
@@ -32,9 +32,10 @@
 
   #stage{
     position:absolute; inset:0;
-    perspective: 900px;
+    perspective: 950px;
     transform-style: preserve-3d;
     overflow:hidden;
+    pointer-events:none;
   }
 
   #cloud{
@@ -47,15 +48,14 @@
     position:relative;
     z-index:3;
     text-align:center;
-    width:min(960px, 92vw);
+    width:min(980px, 92vw);
     padding:24px;
     pointer-events:none;
   }
 
-  /* Title: serif like reference */
   .intro-content h1{
-    font-family: "Cormorant Garamond", serif;
-    font-weight: 500;
+    font-family:"Cormorant Garamond", serif;
+    font-weight:500;
     margin:0 0 14px;
     letter-spacing:.01em;
     font-size: clamp(46px, 6.2vw, 92px);
@@ -63,21 +63,19 @@
     text-wrap: balance;
   }
 
-  /* Subtitle: clean sans */
   .intro-content p{
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     margin:0 0 30px;
     opacity:.72;
     line-height:1.65;
     font-size: clamp(13px, 1.45vw, 16px);
   }
 
-  /* Enter */
   #enterBtn{
     pointer-events:auto;
     opacity:0;
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    font-weight: 400;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-weight:400;
     padding:12px 30px;
     background:transparent;
     border:1px solid rgba(255,255,255,.35);
@@ -86,26 +84,27 @@
     text-transform:uppercase;
     cursor:pointer;
     transition:opacity 1.2s ease, border-color .3s ease, transform .25s ease;
+    user-select:none;
   }
-  #enterBtn:hover{ border-color:#fff; transform: translateY(-1px); }
+  #enterBtn:hover{ border-color:#fff; transform:translateY(-1px); }
 
-  /* --- Date items (cloud around the title) --- */
-  .date{
+  /* --- YEARS (text only, no bubbles) --- */
+  .year{
     position:absolute;
-    left:0; top:0;               /* IMPORTANT: we place with transforms, not 50/50 */
-    transform-style: preserve-3d;
+    left:0; top:0;
+    transform-style:preserve-3d;
     will-change: transform, opacity, filter;
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    font-size: 12px;
-    letter-spacing: .10em;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size:12px;
+    letter-spacing:.12em;
     color: rgba(232,238,252,.95);
-    opacity:.18;
     white-space:nowrap;
     text-shadow: 0 0 14px rgba(0,0,0,.55);
     user-select:none;
+    pointer-events:none;
   }
 
-  /* ================= MAP (unchanged) ================= */
+  /* ================= MAP ================= */
   #wrap{
     position:fixed; inset:0;
     opacity:0; pointer-events:none;
@@ -132,7 +131,7 @@
   .label{
     position:absolute; top:36px; left:50%;
     transform:translateX(-50%);
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     font-size:12px; opacity:.85;
     white-space:nowrap;
   }
@@ -151,7 +150,7 @@
     border:1px solid rgba(255,255,255,.15);
     background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
     text-align:center;
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   }
   .card h2{margin:0 0 12px; font-weight:500}
   .card p{opacity:.85;line-height:1.6;margin:0}
@@ -163,14 +162,16 @@
     color:#e8eefc;
     cursor:pointer;
     letter-spacing:.06em;
+    user-select:none;
   }
 
   .hint{
     position:fixed;
     left:16px; bottom:16px;
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     font-size:12px; opacity:.6;
     z-index:5;
+    user-select:none;
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -215,13 +216,10 @@
 <div class="hint">ENTER → “вихор” → карта · На карті: перетягуй · Коліщатко — zoom</div>
 
 <script>
-/* ========= DATES (приклад як на твоєму референсі) ========= */
-const DATES = [
-  "1840","1362","1918","1941","1932–33","945","2014","19…",
-  "1648","1709","1772","1795","1917","1921","1939","1945",
-  "1954","1961","1979","1986","1991","1994","2004","2008",
-  "2010","2011","2013","2015","2022","2024"
-];
+/* ========= YEARS (тільки 4-значні) =========
+   Зараз: 30 років 1990–2019. Можеш змінити на будь-які 30 років.
+*/
+const YEARS = Array.from({length:30}, (_,i)=> String(1990+i));
 
 const cloud = document.getElementById('cloud');
 const centerEl = document.getElementById('center');
@@ -229,35 +227,48 @@ const enterBtn = document.getElementById('enterBtn');
 const intro = document.getElementById('intro');
 const wrap = document.getElementById('wrap');
 
-/* ========= BUILD ========= */
-const items = DATES.map((txt, i) => {
-  const el = document.createElement('div');
-  el.className = 'date';
-  el.textContent = txt;
-  cloud.appendChild(el);
-
-  // Spread around a ring + some cloud variance
-  const baseA = (i / DATES.length) * Math.PI * 2;
-  return {
-    el,
-    a: baseA,
-    baseA,
-    speed: (0.006 + Math.random()*0.006) * (Math.random()<0.5 ? -1 : 1), // VERY slow (rad/sec)
-    rJ: (Math.random()*120 - 60),
-    yJ: (Math.random()*90 - 45),
-    zBase: -220 + Math.random()*320, // layered depth
-    zPhase: Math.random()*Math.PI*2,
-    wobPhase: Math.random()*Math.PI*2
-  };
-});
-
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function easeInOutCubic(x){ return x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2; }
 
+/* ========= Build 3D sphere distribution (golden spiral) ========= */
+const items = YEARS.map((y, i) => {
+  const el = document.createElement('div');
+  el.className = 'year';
+  el.textContent = y;
+  cloud.appendChild(el);
+
+  // golden spiral on sphere
+  const n = YEARS.length;
+  const phi = Math.acos(1 - 2*(i + 0.5)/n);           // polar
+  const theta = Math.PI * (1 + Math.sqrt(5)) * i;    // azimuth (golden angle)
+
+  // unit sphere coords
+  const x = Math.cos(theta) * Math.sin(phi);
+  const yv = Math.sin(theta) * Math.sin(phi);
+  const z = Math.cos(phi);
+
+  return {
+    el,
+    // base position on unit sphere
+    x0: x,
+    y0: yv,
+    z0: z,
+    // tiny personal jitter to avoid perfect math look
+    j: (Math.random()*0.12 - 0.06),
+    // phase for breathing
+    ph: Math.random()*Math.PI*2
+  };
+});
+
+/* ========= Motion state ========= */
 let vortex = false;
 let vortexStart = 0;
 
-/* show ENTER after pause */
+// slow global rotations (VERY slow drift)
+let rotY = 0;
+let rotX = 0;
+
+// show ENTER after pause
 setTimeout(()=>{
   enterBtn.style.opacity = '1';
   enterBtn.style.pointerEvents = 'auto';
@@ -269,58 +280,85 @@ enterBtn.addEventListener('click', ()=>{
   vortexStart = performance.now();
 });
 
-/* ========= ANIMATE ========= */
+/* ========= 3D helpers ========= */
+function rotateY(x,z,a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return { x: x*ca + z*sa, z: -x*sa + z*ca };
+}
+function rotateX(y,z,a){
+  const ca=Math.cos(a), sa=Math.sin(a);
+  return { y: y*ca - z*sa, z: y*sa + z*ca };
+}
+
 let last = performance.now();
 function tick(now){
   const dt = (now - last) / 1000;
   last = now;
 
-  // CENTER = center of the text block (THIS fixes “dates go to corner”)
+  // center of intro text block (critical fix)
   const rect = centerEl.getBoundingClientRect();
   const cx = rect.left + rect.width/2;
   const cy = rect.top + rect.height/2;
 
-  // Orbit radius around text
+  // cloud radius tied to screen (keeps it around text)
   const minSide = Math.min(window.innerWidth, window.innerHeight);
-  const baseR = clamp(minSide * 0.34, 240, 420);
+  const R = clamp(minSide * 0.22, 140, 260); // tighter & denser around text
 
-  // vortex progress
+  // progress for vortex
   const p = vortex ? clamp((now - vortexStart)/1600, 0, 1) : 0;
   const pe = easeInOutCubic(p);
 
+  // base drift (super slow)
+  const baseRotSpeed = 0.14; // radians per second *very slow feel
+  rotY += baseRotSpeed * dt * 0.25;
+  rotX += baseRotSpeed * dt * 0.12;
+
+  // in vortex: spin up hard
+  const spinBoost = vortex ? (1 + pe*10.0) : 1;
+  const aY = rotY * spinBoost;
+  const aX = rotX * spinBoost;
+
   items.forEach((it, i) => {
-    it.a += it.speed * dt;
+    // start from sphere, add tiny jitter
+    let x = (it.x0 + it.j) * R;
+    let y = (it.y0 + it.j*0.7) * (R * 0.78);
+    let z = (it.z0 + it.j*0.5) * (R * 1.25);
 
-    // gentle breathing (small)
-    const wob = Math.sin(now*0.00035 + it.wobPhase) * 10;
-    const wobY = Math.cos(now*0.00028 + it.wobPhase) * 8;
+    // subtle breathing makes it alive (small)
+    const breathe = Math.sin(now*0.00045 + it.ph) * 6;
+    x += (it.x0) * breathe;
+    y += (it.y0) * breathe;
 
-    // vortex: accelerate spin + collapse radius
-    const spinBoost = vortex ? (1 + pe*7.0) : 1;
-    const a = it.a * spinBoost;
+    // rotate sphere slowly
+    let ry = rotateY(x, z, aY); x = ry.x; z = ry.z;
+    let rx = rotateX(y, z, aX); y = rx.y; z = rx.z;
 
-    const r = vortex ? (baseR + it.rJ + wob) * (1 - pe) : (baseR + it.rJ + wob);
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r * 0.70 + it.yJ + wobY;
+    // vortex: collapse radius & shoot into camera
+    // collapse to center
+    const collapse = vortex ? (1 - pe) : 1;
+    x *= collapse;
+    y *= collapse;
 
-    // depth breathing
-    const zIdle = it.zBase + Math.sin(now*0.00035 + it.zPhase) * 22;
+    // Z fly forward in vortex (camera hit)
+    const zFly = vortex ? (pe * (1150 + i*6)) : 0;
+    z += zFly;
 
-    // vortex: shoot towards camera
-    const z = vortex ? (zIdle + pe * (1200 + i*10)) : zIdle;
+    // perspective-ish scaling by depth
+    // normalize z to 0..1 for opacity/scale
+    const zNorm = clamp((z + 260) / 900, 0, 1);
+    const scale = 0.78 + zNorm * 0.85;        // near bigger
+    const opacity = clamp(0.08 + zNorm * 0.52, 0.06, 0.62);
 
-    // size/opacity by depth (like your reference layering)
-    const zNorm = (z + 260) / 700;
-    const scale = 0.85 + clamp(zNorm, 0, 1) * 0.55;
-    const opacity = clamp(0.10 + clamp(zNorm,0,1) * 0.40, 0.08, 0.58);
-    const blur = vortex ? (pe*1.8) : 0;
+    // blur only during vortex to imitate “into lens”
+    const blur = vortex ? (pe*2.0) : 0;
 
     it.el.style.opacity = opacity.toFixed(3);
     it.el.style.filter = `blur(${blur}px)`;
     it.el.style.transform =
-      `translate3d(${cx + x}px, ${cy + y}px, ${z}px) translate(-50%, -50%) scale(${scale})`;
+      `translate3d(${cx + x}px, ${cy + y}px, ${z}px) translate(-50%,-50%) scale(${scale})`;
   });
 
+  // finish transition to map
   if(vortex && p >= 1){
     intro.style.opacity = '0';
     setTimeout(()=>{
