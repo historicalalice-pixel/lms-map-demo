@@ -6,7 +6,6 @@
 <title>LMS Map — Demo</title>
 
 <style>
-  /* RESET */
   *{box-sizing:border-box}
   html,body{
     margin:0; padding:0; height:100%;
@@ -15,7 +14,7 @@
     overflow:hidden;
   }
 
-  /* ================= ENTRY ================= */
+  /* =============== INTRO =============== */
   #intro{
     position:fixed; inset:0;
     background:
@@ -27,7 +26,7 @@
     transition:opacity 1.2s ease;
   }
 
-  /* 3D stage */
+  /* 3D stage (light) */
   #stage{
     position:absolute; inset:0;
     perspective: 900px;
@@ -35,29 +34,38 @@
     overflow:hidden;
   }
 
+  /* floating dates container */
+  #dates{
+    position:absolute; inset:0;
+    transform-style:preserve-3d;
+    pointer-events:none;
+  }
+
   /* center copy */
   .intro-content{
     position:relative;
     z-index:3;
     text-align:center;
-    max-width:820px;
+    width:min(860px, 92vw);
     padding:20px;
-    transform: translateZ(0);
-    pointer-events:none; /* so bubbles don't steal clicks */
+    pointer-events:none;
   }
   .intro-content h1{
-    font-size:46px;
-    font-weight:600;
     margin:0 0 14px;
+    font-weight:600;
     letter-spacing:.02em;
+    font-size: clamp(30px, 4.2vw, 52px);
+    line-height:1.15;
+    text-wrap: balance;
   }
   .intro-content p{
-    margin:0 0 32px;
+    margin:0 0 30px;
     opacity:.72;
     line-height:1.6;
+    font-size: clamp(13px, 1.4vw, 16px);
   }
 
-  /* ENTER */
+  /* Enter */
   #enterBtn{
     pointer-events:auto;
     opacity:0;
@@ -70,70 +78,39 @@
     cursor:pointer;
     transition:opacity 1.2s ease, border-color .3s ease, transform .25s ease;
   }
-  #enterBtn:hover{
-    border-color:#fff;
-    transform:translateY(-1px);
-  }
+  #enterBtn:hover{ border-color:#fff; transform:translateY(-1px); }
 
-  /* ====== Bubble clusters ====== */
-  #bubbles{
-    position:absolute; inset:0;
-    z-index:2;
-    transform-style:preserve-3d;
-  }
-
+  /* Each date bubble */
   .bubble{
     position:absolute;
     left:50%; top:50%;
-    width: 210px; height: 210px;
-    margin-left:-105px; margin-top:-105px;
+    width: 92px; height: 92px;
+    margin-left:-46px; margin-top:-46px;
     border-radius:50%;
     border:1px solid rgba(255,255,255,.14);
-    background: radial-gradient(120px 120px at 30% 30%, rgba(255,255,255,.05), transparent 65%);
-    box-shadow:
-      0 0 40px rgba(106,167,255,.10),
-      inset 0 0 18px rgba(255,255,255,.05);
+    background: radial-gradient(60px 60px at 30% 30%, rgba(255,255,255,.05), transparent 65%);
+    box-shadow: 0 0 40px rgba(106,167,255,.08), inset 0 0 18px rgba(255,255,255,.04);
     backdrop-filter: blur(2px);
     transform-style:preserve-3d;
     will-change: transform, opacity, filter;
-    opacity:.95;
+    opacity:.85;
   }
-
-  /* inner ring effect (subtle) */
   .bubble::after{
     content:"";
-    position:absolute; inset:14px;
+    position:absolute; inset:10px;
     border-radius:50%;
-    border:1px dashed rgba(255,255,255,.08);
-    opacity:.5;
+    border:1px dashed rgba(255,255,255,.07);
+    opacity:.6;
   }
-
-  .bubble .dates{
+  .bubble .t{
     position:absolute; inset:0;
     display:flex; align-items:center; justify-content:center;
-    padding:22px;
-    text-align:center;
-    gap:10px;
-    flex-wrap:wrap;
-    align-content:center;
-  }
-
-  .bubble .d{
     font-size:12px;
-    opacity:.33;
-    letter-spacing:.06em;
-    white-space:nowrap;
+    letter-spacing:.08em;
+    opacity:.55;
   }
 
-  /* little shimmer */
-  @keyframes shimmer{
-    0%,100%{opacity:.20}
-    50%{opacity:.42}
-  }
-  .bubble .d:nth-child(3n){ animation: shimmer 4.2s infinite ease-in-out; }
-  .bubble .d:nth-child(4n){ animation: shimmer 5.6s infinite ease-in-out; }
-
-  /* ================= MAP ================= */
+  /* =============== MAP =============== */
   #wrap{
     position:fixed; inset:0;
     opacity:0; pointer-events:none;
@@ -141,8 +118,7 @@
     z-index:1;
   }
   #space{
-    position:absolute;
-    left:50%; top:50%;
+    position:absolute; left:50%; top:50%;
     width:3000px; height:2000px;
     transform:translate(-50%,-50%) scale(1);
     background:
@@ -164,7 +140,7 @@
     white-space:nowrap;
   }
 
-  /* ================= DEMO SCENE ================= */
+  /* =============== DEMO SCENE =============== */
   #scene{
     position:fixed; inset:0;
     display:none; align-items:center; justify-content:center;
@@ -197,19 +173,17 @@
     z-index:5;
   }
 
-  /* Reduce motion accessibility */
   @media (prefers-reduced-motion: reduce){
-    .bubble .d{animation:none !important}
+    .bubble{ transition:none !important; }
   }
 </style>
 </head>
 
 <body>
 
-<!-- INTRO -->
 <div id="intro">
   <div id="stage">
-    <div id="bubbles"></div>
+    <div id="dates"></div>
   </div>
 
   <div class="intro-content">
@@ -219,7 +193,6 @@
   </div>
 </div>
 
-<!-- MAP -->
 <div id="wrap">
   <div id="space">
     <div class="node" id="demoNode">
@@ -228,7 +201,6 @@
   </div>
 </div>
 
-<!-- DEMO SCENE -->
 <div id="scene">
   <div class="card">
     <h2>Демо-урок</h2>
@@ -237,183 +209,177 @@
   </div>
 </div>
 
-<div class="hint">Після ENTER: карта · На карті: перетягуй мишкою · Коліщатко — zoom</div>
+<div class="hint">ENTER → карта · На карті: перетягуй · Коліщатко — zoom</div>
 
 <script>
-/* =========================
-   1) BUILD 30 DATES → BUBBLES
-========================= */
-const bubblesRoot = document.getElementById('bubbles');
-const enterBtn = document.getElementById('enterBtn');
-const intro = document.getElementById('intro');
-const wrap = document.getElementById('wrap');
+  /* ========== DATA ========== */
+  // Тимчасово роки. Потім замінимо на твої справжні “дати/події”.
+  const datesList = Array.from({length:30}, (_,i)=> String(1990+i));
 
-const years = Array.from({length:30}, (_,i)=> String(1990+i)); // placeholder (потім замінимо на “дати подій”)
-const GROUPS = 6; // 6 bubbles
-const PER = Math.ceil(years.length / GROUPS); // 5 per bubble
+  const datesRoot = document.getElementById('dates');
 
-function chunk(arr, size){
-  const out=[];
-  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
-  return out;
-}
+  /* ========== BUILD 30 BUBBLES (1 date = 1 bubble) ========== */
+  const bubbles = datesList.map((txt, i) => {
+    const el = document.createElement('div');
+    el.className = 'bubble';
+    const t = document.createElement('div');
+    t.className = 't';
+    t.textContent = txt;
+    el.appendChild(t);
+    datesRoot.appendChild(el);
 
-const groups = chunk(years, PER).slice(0, GROUPS);
+    // stable circular layout params
+    const baseA = (i / datesList.length) * Math.PI * 2;
+    const ring = (i % 2 === 0) ? 0 : 1; // two rings for depth
+    const phase = Math.random() * Math.PI * 2;
 
-const bubbles = groups.map((list, idx) => {
-  const b = document.createElement('div');
-  b.className = 'bubble';
-  const dates = document.createElement('div');
-  dates.className = 'dates';
-  list.forEach(t=>{
-    const s=document.createElement('div');
-    s.className='d';
-    s.textContent=t;
-    dates.appendChild(s);
-  });
-  b.appendChild(dates);
-  bubblesRoot.appendChild(b);
+    return {
+      el,
+      a: baseA,
+      baseA,
+      ring,
+      phase,
 
-  // motion params
-  const baseR = 260 + (idx % 3) * 70;      // ring radius variation
-  const baseA = (idx / GROUPS) * Math.PI*2; // start angle
-  const speed = (0.0006 + Math.random()*0.0005) * (idx%2?1:-1); // drift speed
-  const wob = 18 + Math.random()*18;       // small wobble radius
-  const wobS = 0.001 + Math.random()*0.0015;
-  const tilt = (Math.random()*10-5);       // deg
-  const z0 = -120 - Math.random()*180;     // start behind
-  return {
-    el: b,
-    baseR, baseA, a: baseA,
-    speed,
-    wob, wobS, wobP: Math.random()*Math.PI*2,
-    tilt,
-    z: z0,
-    phase: Math.random()*Math.PI*2
-  };
-});
+      // VERY SLOW drift
+      // radians per second ~ 0.02..0.05 (slow)
+      speed: (0.020 + Math.random()*0.020) * (Math.random() < 0.5 ? -1 : 1),
 
-/* =========================
-   2) IDLE ORBIT (CIRCULAR DRIFT)
-========================= */
-let t0 = performance.now();
-let vortex = false;
-let vortexStart = 0;
+      // small wobble (px)
+      wob: 10 + Math.random()*16,
+      wob2: 6 + Math.random()*10,
 
-function easeInOutCubic(x){
-  return x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
-}
+      // gentle rotation
+      rot: (Math.random()*8 - 4),
 
-function render(now){
-  const dt = now - t0;
-  t0 = now;
-
-  // vortex progress
-  let p = 0;
-  if(vortex){
-    p = Math.min(1, (now - vortexStart) / 1600); // 1.6s
-  }
-  const pe = easeInOutCubic(p);
-
-  const cx = window.innerWidth/2;
-  const cy = window.innerHeight/2;
-
-  bubbles.forEach((b, i)=>{
-    // idle orbit
-    b.a += b.speed * dt;
-    b.wobP += b.wobS * dt;
-
-    // orbit radius shrink + spin-up in vortex
-    const spinBoost = vortex ? (1 + pe*8) : 1;
-    const a = b.a * spinBoost;
-
-    const wobR = b.wob * Math.sin(b.wobP);
-    const rIdle = b.baseR + wobR;
-
-    // During vortex: radius → 0
-    const r = vortex ? rIdle * (1 - pe) : rIdle;
-
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r * 0.72; // ellipse a bit (cinematic)
-
-    // Depth: in vortex, objects fly into camera (Z increases)
-    // Start behind (-) → shoot forward (+)
-    const z = vortex
-      ? (-180 + i*14) + pe * (1200 + i*40)
-      : b.z + Math.sin(now*0.0007 + b.phase)*18;
-
-    // Scale: based on depth
-    const s = 1 + Math.max(0, z) / 700;
-
-    // Fade + blur as they approach camera (gives “whirl into lens”)
-    const opacity = vortex ? (1 - pe*0.55) : 0.95;
-    const blur = vortex ? (pe*2.2) : 0;
-
-    b.el.style.opacity = opacity.toFixed(3);
-    b.el.style.filter = `blur(${blur}px)`;
-
-    // Subtle tilt + extra rotation in vortex
-    const rot = b.tilt + (vortex ? pe*220 : 0);
-
-    b.el.style.transform =
-      `translate3d(${cx + x - 105}px, ${cy + y - 105}px, ${z}px) rotate(${rot}deg) scale(${s})`;
+      // depth baseline
+      z0: -80 - ring*60 - Math.random()*70
+    };
   });
 
-  // intro fades at the end
-  if(vortex && p >= 1){
-    intro.style.opacity = '0';
-    setTimeout(()=>{
-      intro.style.display = 'none';
-      wrap.style.opacity = '1';
-      wrap.style.pointerEvents = 'auto';
-    }, 900);
-    vortex = false; // stop repeating
-  } else {
-    requestAnimationFrame(render);
+  /* ========== LAYOUT helpers ========== */
+  function getRadius(){
+    // radius tied to screen, so it stays around the title and doesn't fly off
+    const minSide = Math.min(window.innerWidth, window.innerHeight);
+    return Math.max(200, Math.min(380, minSide * 0.34));
   }
-}
 
-/* show ENTER after pause */
-setTimeout(()=>{
-  enterBtn.style.opacity = '1';
-  enterBtn.style.pointerEvents = 'auto';
-}, 2200);
+  let radius = getRadius();
+  window.addEventListener('resize', ()=>{ radius = getRadius(); });
 
-/* trigger vortex */
-enterBtn.addEventListener('click', ()=>{
-  if(vortex) return;
-  vortex = true;
-  vortexStart = performance.now();
-});
+  /* ========== ENTRY / VORTEX ========== */
+  const enterBtn = document.getElementById('enterBtn');
+  const intro = document.getElementById('intro');
+  const wrap = document.getElementById('wrap');
 
-/* start animation loop */
-requestAnimationFrame(render);
+  let vortex = false;
+  let vortexStart = 0;
 
-/* =========================
-   3) MAP PAN/ZOOM + DEMO SCENE
-========================= */
-const space = document.getElementById('space');
-let scale=1, x=0, y=0, drag=false, sx=0, sy=0;
+  function easeInOutCubic(x){
+    return x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+  }
 
-function apply(){ space.style.transform = `translate(${x}px, ${y}px) scale(${scale})`; }
+  setTimeout(()=>{
+    enterBtn.style.opacity = '1';
+    enterBtn.style.pointerEvents = 'auto';
+  }, 2200);
 
-wrap.addEventListener('mousedown', e=>{ drag=true; sx=e.clientX-x; sy=e.clientY-y; });
-window.addEventListener('mouseup', ()=>drag=false);
-window.addEventListener('mousemove', e=>{
-  if(!drag) return;
-  x=e.clientX-sx; y=e.clientY-sy; apply();
-});
-wrap.addEventListener('wheel', e=>{
-  e.preventDefault();
-  scale *= e.deltaY>0 ? 0.9 : 1.1;
-  scale = Math.max(0.4, Math.min(2.5, scale));
-  apply();
-}, {passive:false});
+  enterBtn.addEventListener('click', ()=>{
+    if(vortex) return;
+    vortex = true;
+    vortexStart = performance.now();
+  });
 
-/* demo scene */
-const scene = document.getElementById('scene');
-document.getElementById('demoNode').onclick = ()=> scene.style.display='flex';
-document.getElementById('closeScene').onclick = ()=> scene.style.display='none';
+  /* ========== ANIMATION LOOP (slow drift) ========== */
+  let last = performance.now();
+
+  function tick(now){
+    const dt = (now - last) / 1000; // seconds
+    last = now;
+
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+
+    const p = vortex ? Math.min(1, (now - vortexStart) / 1700) : 0;
+    const pe = easeInOutCubic(p);
+
+    bubbles.forEach((b, i) => {
+      // slow orbit
+      b.a += b.speed * dt;
+
+      // two rings slightly different radii
+      const ringR = radius + (b.ring ? 70 : 0);
+
+      // gentle wobble so it feels alive (VERY small)
+      const wob = Math.sin(now*0.00025 + b.phase) * b.wob;
+      const wob2 = Math.cos(now*0.00018 + b.phase*1.7) * b.wob2;
+
+      // vortex: radius shrinks, spin accelerates a bit, Z shoots forward
+      const spinBoost = vortex ? (1 + pe*6) : 1;
+      const a = b.a * spinBoost;
+
+      const r = vortex ? (ringR + wob) * (1 - pe) : (ringR + wob);
+      const x = Math.cos(a) * r + wob2;
+      const y = Math.sin(a) * r * 0.70 + wob2*0.6;
+
+      // depth
+      const z = vortex
+        ? b.z0 + pe * (1000 + i*10)
+        : b.z0 + Math.sin(now*0.00035 + b.phase) * 10;
+
+      // scale with depth
+      const s = 1 + Math.max(0, z) / 850;
+
+      // subtle fade/blur in vortex (not too aggressive)
+      const op = vortex ? (0.85 - pe*0.45) : 0.85;
+      const blur = vortex ? (pe*1.8) : 0;
+
+      const rot = b.rot + (vortex ? pe*140 : Math.sin(now*0.00022 + b.phase)*2);
+
+      b.el.style.opacity = op.toFixed(3);
+      b.el.style.filter = `blur(${blur}px)`;
+      b.el.style.transform =
+        `translate3d(${cx + x - 46}px, ${cy + y - 46}px, ${z}px) rotate(${rot}deg) scale(${s})`;
+    });
+
+    // finish transition
+    if(vortex && p >= 1){
+      intro.style.opacity = '0';
+      setTimeout(()=>{
+        intro.style.display = 'none';
+        wrap.style.opacity = '1';
+        wrap.style.pointerEvents = 'auto';
+      }, 900);
+      vortex = false;
+      return;
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  requestAnimationFrame(tick);
+
+  /* ========== MAP PAN/ZOOM + DEMO SCENE ========== */
+  const space = document.getElementById('space');
+  let scale=1, mx=0, my=0, drag=false, sx=0, sy=0;
+
+  function apply(){ space.style.transform = `translate(${mx}px, ${my}px) scale(${scale})`; }
+
+  wrap.addEventListener('mousedown', e=>{ drag=true; sx=e.clientX-mx; sy=e.clientY-my; });
+  window.addEventListener('mouseup', ()=>drag=false);
+  window.addEventListener('mousemove', e=>{
+    if(!drag) return;
+    mx=e.clientX-sx; my=e.clientY-sy; apply();
+  });
+  wrap.addEventListener('wheel', e=>{
+    e.preventDefault();
+    scale *= e.deltaY>0 ? 0.9 : 1.1;
+    scale = Math.max(0.4, Math.min(2.5, scale));
+    apply();
+  }, {passive:false});
+
+  const scene = document.getElementById('scene');
+  document.getElementById('demoNode').onclick = ()=> scene.style.display='flex';
+  document.getElementById('closeScene').onclick = ()=> scene.style.display='none';
 </script>
 
 </body>
