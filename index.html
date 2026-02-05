@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LMS — Intro</title>
+<title>LMS — Intro + Explore</title>
 
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:#05070d;color:#e8eefc;overflow:hidden}
+  button{font:inherit}
 
-  /* ===================== INTRO (НЕ ЛАМАЄМО) ===================== */
+  /* ===================== INTRO (твоя стартова) ===================== */
   #intro{
     position:fixed; inset:0;
     background:
@@ -21,7 +23,6 @@
     z-index:10;
     transition: opacity 1.0s ease;
   }
-
   #stage{
     position:absolute; inset:0;
     perspective: 980px;
@@ -38,7 +39,6 @@
     transform: translateZ(0);
     will-change: transform;
   }
-
   .intro-content{
     position:relative; z-index:3;
     text-align:center;
@@ -47,7 +47,6 @@
     pointer-events:none;
     transition: opacity .65s ease, transform .65s ease, filter .65s ease;
   }
-
   .intro-content h1{
     font-family:"Cormorant Garamond", serif;
     font-weight:500;
@@ -63,7 +62,6 @@
     line-height:1.65;
     font-size:clamp(13px,1.45vw,16px);
   }
-
   #enterBtn{
     pointer-events:auto;
     opacity:0;
@@ -80,7 +78,6 @@
     user-select:none;
   }
   #enterBtn:hover{border-color:#fff;transform:translateY(-1px)}
-
   .year{
     position:absolute; left:0; top:0;
     transform-style:preserve-3d;
@@ -93,21 +90,12 @@
     pointer-events:none;
     text-shadow: 0 0 14px rgba(0,0,0,.55);
   }
-
-  /* During vortex: cut heavy effects */
-  .vortex .year{
-    text-shadow:none !important;
-    filter:none !important;
-  }
-
-  /* Fade center content at vortex start */
+  .vortex .year{ text-shadow:none !important; filter:none !important; }
   .vortexing .intro-content{
     opacity:0;
     transform: translateY(-10px) scale(0.99);
     filter: blur(1px);
   }
-
-  /* Fade overlay between scenes */
   #fadeOverlay{
     position:fixed; inset:0;
     background:#05070d;
@@ -117,20 +105,20 @@
     transition: opacity .6s ease;
   }
 
-  /* ===================== MAIN MAP (НОВА ГОЛОВНА) ===================== */
-  #wrap{
+  /* ===================== MAIN: Explore grid-map (як 100lostspecies) ===================== */
+  #explore{
     position:fixed; inset:0;
     opacity:0;
     pointer-events:none;
     transition:opacity 1s ease;
     z-index:1;
     background:
-      radial-gradient(900px 500px at 35% 35%, rgba(106,167,255,.10), transparent 55%),
-      radial-gradient(800px 600px at 70% 65%, rgba(120,255,204,.07), transparent 55%),
-      #05070d;
+      radial-gradient(1200px 800px at 50% 55%, rgba(0,0,0,.08), rgba(0,0,0,.70) 70%),
+      #f4f2ee; /* світлий "папір" */
+    color:#0b0e14;
   }
 
-  /* Top UI */
+  /* Верхні чіпи */
   .topbar{
     position:absolute; left:14px; right:14px; top:14px;
     display:flex; align-items:center; justify-content:space-between;
@@ -142,16 +130,17 @@
     pointer-events:auto;
     display:flex; align-items:center; gap:10px;
     padding:10px 12px;
-    border:1px solid rgba(255,255,255,.12);
+    border:1px solid rgba(0,0,0,.12);
     border-radius:999px;
-    background:rgba(10,12,18,.55);
+    background:rgba(255,255,255,.70);
     backdrop-filter: blur(10px);
     font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:#0b0e14;
   }
   .chip b{font-size:13px; letter-spacing:.02em; font-weight:600}
-  .chip span{font-size:12px; opacity:.7}
+  .chip span{font-size:12px; opacity:.65}
 
-  /* Viewport for pan/zoom */
+  /* Viewport */
   #viewport{
     position:absolute; inset:0;
     overflow:hidden;
@@ -159,7 +148,7 @@
   }
   #viewport:active{ cursor:grabbing; }
 
-  /* Big world */
+  /* “Світ” */
   #world{
     position:absolute;
     left:50%; top:50%;
@@ -169,104 +158,140 @@
     will-change: transform;
   }
 
-  /* Subtle dot-grid like a map */
+  /* легкі “пил/зерно” точки */
   #world::before{
     content:"";
     position:absolute; inset:0;
     background:
-      radial-gradient(circle at 1px 1px, rgba(255,255,255,.06) 1px, transparent 1px);
-    background-size: 44px 44px;
-    opacity:.22;
-    mask-image: radial-gradient(1200px 900px at 50% 50%, rgba(0,0,0,1), transparent 70%);
-  }
-
-  /* Paths */
-  .path{
-    position:absolute; left:0; top:0;
-    width:100%; height:100%;
+      radial-gradient(circle at 1px 1px, rgba(0,0,0,.11) 1px, transparent 1px);
+    background-size: 58px 58px;
+    opacity:.08;
     pointer-events:none;
   }
-  .path line{
-    stroke: rgba(232,238,252,.12);
-    stroke-width: 2;
+
+  /* Center Explore button */
+  #centerButton{
+    position:absolute;
+    left:2600px; top:1700px;
+    transform: translate(-50%,-50%);
+    z-index:2;
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:auto;
   }
-  .path line.demo-line{
-    stroke: rgba(106,167,255,.28);
+  #exploreBtn{
+    font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    padding:10px 14px;
+    border-radius:0;
+    border:1px solid rgba(0,0,0,.65);
+    background:#0b0e14;
+    color:#fff;
+    cursor:pointer;
+    box-shadow: 0 12px 30px rgba(0,0,0,.12);
+    user-select:none;
   }
 
-  /* Nodes */
-  .node{
+  /* Cards */
+  .card{
     position:absolute;
-    width:14px; height:14px;
-    border-radius:999px;
-    background:rgba(232,238,252,.85);
-    box-shadow: 0 0 0 6px rgba(232,238,252,.05), 0 0 24px rgba(106,167,255,.20);
-    transform: translate(-50%,-50%);
+    width:260px;
+    height:190px;
+    border-radius:6px;
+    background:#fff;
+    box-shadow:
+      0 22px 50px rgba(0,0,0,.10),
+      0 8px 14px rgba(0,0,0,.08);
+    overflow:hidden;
+    transform: translate(-50%,-50%) rotate(var(--r,0deg));
+    transform-origin:center;
     cursor:pointer;
     user-select:none;
   }
-  .node.demo{
-    background:#6aa7ff;
-    box-shadow: 0 0 0 7px rgba(106,167,255,.14), 0 0 34px rgba(106,167,255,.55);
+  .card::after{
+    content:"";
+    position:absolute; inset:0;
+    background: radial-gradient(700px 260px at 50% 40%, rgba(0,0,0,0), rgba(0,0,0,.06));
+    pointer-events:none;
   }
-  .node.locked{
-    opacity:.35;
-    box-shadow: 0 0 0 6px rgba(232,238,252,.03), 0 0 18px rgba(0,0,0,0);
+  .art{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(220px 180px at 30% 30%, rgba(120,255,204,.35), transparent 60%),
+      radial-gradient(260px 220px at 70% 70%, rgba(106,167,255,.30), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,.70));
+    filter: saturate(1.05);
+    transform: scale(1.02);
   }
-
-  .node-label{
-    position:absolute;
-    left:14px; top:50%;
-    transform: translateY(-50%);
-    white-space:nowrap;
+  .card[data-img] .art{
+    background-image: var(--img);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  .label{
+    position:absolute; left:12px; right:12px; bottom:10px;
     font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     font-size:12px;
     letter-spacing:.02em;
-    color:rgba(232,238,252,.85);
-    text-shadow: 0 0 16px rgba(0,0,0,.65);
+    color:rgba(0,0,0,.75);
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    text-shadow: 0 1px 0 rgba(255,255,255,.6);
     pointer-events:none;
   }
-  .node-meta{
-    display:block;
-    font-size:11px;
-    opacity:.65;
-    margin-top:2px;
+  .label b{font-weight:600}
+  .label i{font-style:normal; opacity:.55; font-size:11px}
+
+  /* Hover */
+  .card:hover{
+    box-shadow:
+      0 30px 70px rgba(0,0,0,.14),
+      0 10px 18px rgba(0,0,0,.10);
   }
 
-  /* DEMO SCENE */
+  /* DEMO SCENE MODAL */
   #scene{
     position:fixed; inset:0;
     display:none;
     align-items:center; justify-content:center;
-    background: rgba(5,7,13,.82);
+    background: rgba(10,12,18,.65);
     backdrop-filter: blur(10px);
-    z-index:20;
+    z-index:30;
   }
-  .card{
+  .modal{
     width:min(820px, 92vw);
     padding:28px;
     border-radius:18px;
-    border:1px solid rgba(255,255,255,.15);
-    background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.18);
+    background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+    color:#e8eefc;
     text-align:center;
     font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   }
-  .close-btn{
-    margin-top:24px;
-    padding:10px 22px;
+  .modal h2{margin:0 0 10px; font-size:20px}
+  .modal p{margin:0 0 18px; opacity:.78; line-height:1.6}
+  .btn{
+    padding:10px 18px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,.25);
     background:transparent;
-    border:1px solid rgba(255,255,255,.35);
     color:#e8eefc;
     cursor:pointer;
-    letter-spacing:.06em;
-    user-select:none;
+  }
+  .btn.primary{
+    border-color: rgba(106,167,255,.55);
+    background: rgba(106,167,255,.14);
   }
 
   .hint{
-    position:fixed;left:16px;bottom:16px;
+    position:fixed; left:16px; bottom:16px;
     font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    font-size:12px;opacity:.6;z-index:5;user-select:none;
+    font-size:12px; opacity:.55;
+    z-index:5;
+    user-select:none;
     pointer-events:none;
+    color:rgba(0,0,0,.65);
   }
 </style>
 </head>
@@ -282,11 +307,10 @@
     <button id="enterBtn">ПОЧАТИ</button>
   </div>
 </div>
-
 <div id="fadeOverlay"></div>
 
-<!-- MAIN MAP -->
-<div id="wrap">
+<!-- MAIN Explore -->
+<div id="explore">
   <div class="topbar">
     <div class="chip"><b>Карта курсу</b><span>Демо</span></div>
     <div class="chip"><span>Поки без логіну</span></div>
@@ -295,56 +319,67 @@
   <div id="viewport">
     <div id="world">
 
-      <svg class="path" viewBox="0 0 5200 3400" preserveAspectRatio="none">
-        <line x1="900"  y1="2200" x2="1500" y2="1750"></line>
-        <line x1="1500" y1="1750" x2="2100" y2="1450" class="demo-line"></line>
-        <line x1="2100" y1="1450" x2="2850" y2="1200"></line>
-        <line x1="2850" y1="1200" x2="3600" y2="1450"></line>
-        <line x1="3600" y1="1450" x2="4100" y2="2100"></line>
-      </svg>
-
-      <!-- Nodes -->
-      <div class="node locked" data-id="s1" style="left:900px;top:2200px;">
-        <div class="node-label">Вступ<span class="node-meta">Закрито</span></div>
+      <!-- Center Explore -->
+      <div id="centerButton">
+        <button id="exploreBtn">Explore</button>
       </div>
 
-      <div class="node locked" data-id="s2" style="left:1500px;top:1750px;">
-        <div class="node-label">Період 1<span class="node-meta">Закрито</span></div>
+      <!-- Cards (позиції у великому світі) -->
+      <div class="card" data-id="c1" style="left:1400px;top:900px;--r:-6deg">
+        <div class="art"></div>
+        <div class="label"><b>Етап 1</b><i>Locked</i></div>
       </div>
 
-      <div class="node demo" id="demoNode" data-id="demo" style="left:2100px;top:1450px;">
-        <div class="node-label">Демо-урок<span class="node-meta">Доступно</span></div>
+      <div class="card" data-id="c2" style="left:2100px;top:780px;--r:4deg">
+        <div class="art"></div>
+        <div class="label"><b>Етап 2</b><i>Locked</i></div>
       </div>
 
-      <div class="node locked" data-id="s3" style="left:2850px;top:1200px;">
-        <div class="node-label">Період 2<span class="node-meta">Закрито</span></div>
+      <div class="card" data-id="demo" style="left:2600px;top:1080px;--r:-2deg">
+        <div class="art"></div>
+        <div class="label"><b>Демо-урок</b><i>Open</i></div>
       </div>
 
-      <div class="node locked" data-id="s4" style="left:3600px;top:1450px;">
-        <div class="node-label">Період 3<span class="node-meta">Закрито</span></div>
+      <div class="card" data-id="c3" style="left:3180px;top:820px;--r:6deg">
+        <div class="art"></div>
+        <div class="label"><b>Етап 3</b><i>Locked</i></div>
       </div>
 
-      <div class="node locked" data-id="s5" style="left:4100px;top:2100px;">
-        <div class="node-label">Фінал<span class="node-meta">Сертифікат</span></div>
+      <div class="card" data-id="c4" style="left:3800px;top:980px;--r:-5deg">
+        <div class="art"></div>
+        <div class="label"><b>Фінал</b><i>Certificate</i></div>
+      </div>
+
+      <div class="card" data-id="c5" style="left:1850px;top:1750px;--r:7deg">
+        <div class="art"></div>
+        <div class="label"><b>Тема</b><i>Locked</i></div>
+      </div>
+
+      <div class="card" data-id="c6" style="left:3150px;top:1950px;--r:-7deg">
+        <div class="art"></div>
+        <div class="label"><b>Тема</b><i>Locked</i></div>
       </div>
 
     </div>
   </div>
+
+  <div class="hint">Drag — рух · Коліщатко — zoom · Клік по картці — фокус</div>
 </div>
 
-<!-- DEMO MODAL -->
+<!-- Modal -->
 <div id="scene">
-  <div class="card">
+  <div class="modal">
     <h2>Демо-урок</h2>
-    <p>Це приклад формату навчання.<br>Повний шлях відкривається після входу.</p>
-    <button class="close-btn" id="closeScene">Повернутись</button>
+    <p>Це демо-сцена. Тут буде контент уроку, тест і “Завершити”.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button class="btn" id="closeScene">Назад</button>
+      <button class="btn primary" id="finishDemo">Завершити демо</button>
+    </div>
   </div>
 </div>
 
-<div class="hint">ПОЧАТИ → “занурення” → карта · Drag — рух · Коліщатко — zoom · Клік по точці — zoom-to</div>
-
 <script>
-/* ===================== INTRO YEARS (ТВОЄ) ===================== */
+/* ===================== INTRO YEARS (твоя логіка) ===================== */
 function makeYears(start,end){ const out=[]; for(let y=start;y<=end;y++) out.push(String(y)); return out; }
 const YEARS_ALL = makeYears(1800, 2024);
 const LIMIT = 170;
@@ -372,7 +407,7 @@ const stage = document.getElementById('stage');
 const centerEl = document.getElementById('center');
 const enterBtn = document.getElementById('enterBtn');
 const intro = document.getElementById('intro');
-const wrap = document.getElementById('wrap');
+const explore = document.getElementById('explore');
 const fadeOverlay = document.getElementById('fadeOverlay');
 
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
@@ -537,8 +572,8 @@ function tick(now){
       intro.style.opacity='0';
       setTimeout(()=>{
         intro.style.display='none';
-        wrap.style.opacity='1';
-        wrap.style.pointerEvents='auto';
+        explore.style.opacity='1';
+        explore.style.pointerEvents='auto';
         fadeOverlay.style.opacity = '0';
       }, 420);
     }, 60);
@@ -551,20 +586,24 @@ function tick(now){
 }
 requestAnimationFrame(tick);
 
-/* ===================== MAIN MAP (НОВА ЛОГІКА) ===================== */
+/* ===================== EXPLORE MAP (pan/zoom + drift like reference) ===================== */
 const viewport = document.getElementById('viewport');
 const world = document.getElementById('world');
 
 let cam = { x: 0, y: 0, s: 1 };
 let drag=false, sx=0, sy=0, startX=0, startY=0;
 
+// інерція (як мапа)
+let vx=0, vy=0;
+const FRICTION = 0.92;
+
 function applyCam(){
   world.style.transform = `translate(-50%,-50%) translate(${cam.x}px, ${cam.y}px) scale(${cam.s})`;
 }
 
-// стартова позиція камери: щоб демо було ближче до центру
-cam.x = -260;
-cam.y = 140;
+// старт: так щоб центр з Explore був в кадрі
+cam.x = 0;
+cam.y = 0;
 cam.s = 1;
 applyCam();
 
@@ -572,38 +611,92 @@ viewport.addEventListener('mousedown', (e)=>{
   drag=true;
   sx=e.clientX; sy=e.clientY;
   startX=cam.x; startY=cam.y;
+  vx=0; vy=0;
 });
-window.addEventListener('mouseup', ()=>drag=false);
+window.addEventListener('mouseup', ()=>{
+  drag=false;
+});
 window.addEventListener('mousemove', (e)=>{
   if(!drag) return;
-  cam.x = startX + (e.clientX - sx);
-  cam.y = startY + (e.clientY - sy);
+  const dx = (e.clientX - sx);
+  const dy = (e.clientY - sy);
+  cam.x = startX + dx;
+  cam.y = startY + dy;
+  vx = dx; vy = dy;
   applyCam();
 });
 
 viewport.addEventListener('wheel', (e)=>{
   e.preventDefault();
-  const dir = e.deltaY>0 ? 0.9 : 1.1;
-  cam.s = Math.max(0.45, Math.min(2.8, cam.s * dir));
+  const dir = e.deltaY>0 ? 0.92 : 1.08;
+  const next = Math.max(0.45, Math.min(2.6, cam.s * dir));
+  cam.s = next;
   applyCam();
 },{passive:false});
 
-// Плавний zoom-to точки
-function zoomToNode(nodeEl, targetScale=2.0){
-  const nodeRect = nodeEl.getBoundingClientRect();
+// Drift cards (легкий дрейф як у референсі)
+const cards = Array.from(document.querySelectorAll('.card')).map((el, i)=>({
+  el,
+  baseX: parseFloat(el.style.left),
+  baseY: parseFloat(el.style.top),
+  ph: Math.random()*Math.PI*2,
+  a: 0.35 + Math.random()*0.65,
+  sx: (Math.random()<0.5?-1:1) * (0.6 + Math.random()*0.8),
+  sy: (Math.random()<0.5?-1:1) * (0.6 + Math.random()*0.8),
+}));
+
+function driftTick(t){
+  // inertial glide when mouse released
+  if(!drag){
+    cam.x += vx*0.06;
+    cam.y += vy*0.06;
+    vx *= FRICTION;
+    vy *= FRICTION;
+    if(Math.abs(vx)+Math.abs(vy) > 0.2) applyCam();
+  }
+
+  cards.forEach((c, idx)=>{
+    const dx = Math.sin(t*0.00025 + c.ph) * (10*c.a) * c.sx;
+    const dy = Math.cos(t*0.00022 + c.ph) * (8*c.a)  * c.sy;
+    const wob = Math.sin(t*0.00018 + c.ph) * (0.8*c.a);
+
+    c.el.style.left = (c.baseX + dx) + 'px';
+    c.el.style.top  = (c.baseY + dy) + 'px';
+    c.el.style.setProperty('--r', (parseFloat(getComputedStyle(c.el).getPropertyValue('--r')) || 0) + wob + 'deg');
+  });
+
+  requestAnimationFrame(driftTick);
+}
+requestAnimationFrame(driftTick);
+
+/* Click behavior: focus & open demo */
+function zoomToWorldPoint(wx, wy, targetScale=1.35){
+  // перетворення: світ (5200x3400) знаходиться в центрі, translate(-50%,-50%) + cam
+  // Ми рухаємо cam так, щоб точка (wx,wy) була по центру viewport.
   const vr = viewport.getBoundingClientRect();
+  const vxCenter = vr.width/2;
+  const vyCenter = vr.height/2;
 
-  const nx = nodeRect.left + nodeRect.width/2;
-  const ny = nodeRect.top + nodeRect.height/2;
-
-  const vx = vr.left + vr.width/2;
-  const vy = vr.top + vr.height/2;
-
-  const dx = vx - nx;
-  const dy = vy - ny;
-
+  // поточна позиція world в екранних координатах:
+  // world left/top = center + cam, але ми керуємо cam напряму, тому робимо анімацію до потрібного cam.
+  // Якщо точка світу wx,wy: її екранна позиція = center + cam + ( (wx - 2600) * scale, (wy - 1700) * scale )
+  // Тому нам треба cam таку, щоб ця позиція стала рівно центру viewport.
   const from = { x: cam.x, y: cam.y, s: cam.s };
-  const to = { x: cam.x + dx, y: cam.y + dy, s: targetScale };
+  const toS = targetScale;
+
+  const dxWorld = (wx - 2600) * toS;
+  const dyWorld = (wy - 1700) * toS;
+
+  const to = {
+    s: toS,
+    x: (vxCenter - dxWorld) - (viewport.getBoundingClientRect().left + vxCenter - (viewport.getBoundingClientRect().left + vxCenter)) + 0,
+    y: (vyCenter - dyWorld) - (viewport.getBoundingClientRect().top + vyCenter - (viewport.getBoundingClientRect().top + vyCenter)) + 0,
+  };
+
+  // Простіше: нам не треба абсолютні left/top, бо cam застосовується до world в його системі,
+  // Тому формула: cam.x = -(wx-2600)*s ; cam.y = -(wy-1700)*s
+  to.x = -(wx - 2600) * toS;
+  to.y = -(wy - 1700) * toS;
 
   const t0 = performance.now();
   const dur = 520;
@@ -620,24 +713,34 @@ function zoomToNode(nodeEl, targetScale=2.0){
   requestAnimationFrame(anim);
 }
 
-// Демка + locked
-const scene=document.getElementById('scene');
-document.querySelectorAll('.node').forEach(n=>{
-  n.addEventListener('click', ()=>{
-    const id = n.getAttribute('data-id');
-    zoomToNode(n, id==='demo' ? 2.1 : 1.65);
+const scene = document.getElementById('scene');
+document.querySelectorAll('.card').forEach(card=>{
+  card.addEventListener('click', ()=>{
+    const id = card.getAttribute('data-id');
+    const wx = parseFloat(card.style.left);
+    const wy = parseFloat(card.style.top);
 
-    if(id === 'demo'){
-      setTimeout(()=>{ scene.style.display='flex'; }, 540);
+    zoomToWorldPoint(wx, wy, id==='demo' ? 1.6 : 1.35);
+
+    if(id==='demo'){
+      setTimeout(()=>{ scene.style.display='flex'; }, 560);
     }else{
-      setTimeout(()=>{
-        alert('Цей етап доступний у повній версії.');
-      }, 520);
+      setTimeout(()=>{ alert('Цей етап доступний у повній версії.'); }, 420);
     }
   });
 });
 
-document.getElementById('closeScene').onclick=()=>scene.style.display='none';
+document.getElementById('closeScene').onclick = ()=> scene.style.display='none';
+document.getElementById('finishDemo').onclick = ()=>{
+  scene.style.display='none';
+  alert('Демо завершено ✅');
+};
+
+document.getElementById('exploreBtn').onclick = ()=>{
+  // легкий "focus" в центр — як відчуття кнопки Explore
+  zoomToWorldPoint(2600, 1700, 1.15);
+};
 </script>
+
 </body>
 </html>
