@@ -3,154 +3,77 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LMS — Main</title>
+  <title>Hero</title>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-
     :root{
       --bg: #f4f4f1;
-      --ink: #111;
-      --hudBorder: rgba(0,0,0,.18);
-      --hudBg: rgba(255,255,255,.65);
-      --accent: #b7ff2a;
+
+      /* spotlight position */
+      --spotX: 50%;
+      --spotY: 45%;
+
+      /* spotlight size */
+      --spotR: 150px; /* радіус */
+      --soft: 60px;   /* м’який край */
     }
 
     *{ box-sizing:border-box; }
     html,body{ height:100%; margin:0; }
     body{
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       background: var(--bg);
-      color: var(--ink);
       overflow:hidden;
     }
 
-    /* легкий “топо” фон (як в референсі) */
+    /* легкий фон (дуже м’яко, можна прибрати) */
     .bg{
       position:fixed; inset:0;
       background:
-        radial-gradient(900px 600px at 50% 50%, rgba(0,0,0,.04), transparent 70%),
-        repeating-radial-gradient(circle at 40% 35%,
-          rgba(0,0,0,.06) 0px, rgba(0,0,0,.06) 1px,
-          transparent 1px, transparent 34px);
-      opacity:.45;
+        radial-gradient(900px 600px at 50% 50%, rgba(0,0,0,.03), transparent 72%);
       pointer-events:none;
     }
 
-    /* HUD */
-    .hud{
-      position:fixed;
-      left:18px; right:18px; top:14px;
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-start;
-      z-index:20;
-      user-select:none;
-    }
-    .logo{
-      font-weight:800;
-      letter-spacing:-.02em;
-      line-height:0.92;
-      font-size:34px;
-    }
-    .logo span{ display:block; }
-
-    .rightControls{
-      display:flex;
-      gap:10px;
-      align-items:center;
-    }
-
-    .btnStore{
-      display:inline-flex;
-      align-items:center;
-      gap:10px;
-      padding:12px 16px;
-      border:1px solid var(--hudBorder);
-      background: var(--accent);
-      border-radius:10px;
-      font-weight:700;
-      cursor:pointer;
-    }
-    .btnIcon{
-      width:46px; height:46px;
-      border:1px solid var(--hudBorder);
-      background: rgba(255,255,255,.85);
-      border-radius:10px;
-      display:grid;
-      place-items:center;
-      cursor:pointer;
-      font-size:22px;
-      line-height:1;
-    }
-
-    /* сцена */
+    /* центр */
     .stage{
-      position:fixed;
-      inset:0;
+      position:fixed; inset:0;
       display:grid;
       place-items:center;
-      z-index:10;
     }
 
-    /* Круглий портрет */
-    .portraitWrap{
-      width:min(560px, 78vw);
+    /* кругла “маска” як у референсі */
+    .hero{
+      width:min(640px, 82vw);
       aspect-ratio: 1 / 1;
-      position:relative;
       border-radius:999px;
       overflow:hidden;
-      transform: translateY(10px);
-      background: rgba(255,255,255,.25);
-      filter: drop-shadow(0 26px 60px rgba(0,0,0,.15));
+      position:relative;
+      background: rgba(255,255,255,.2);
+      filter: drop-shadow(0 22px 55px rgba(0,0,0,.12));
     }
 
-    .portraitWrap img{
+    .hero img{
       position:absolute; inset:0;
       width:100%; height:100%;
-      object-fit:cover; /* якщо png прозорий — фон буде видно як у тебе */
-      transform: translateZ(0);
+      object-fit:cover;
+      user-select:none;
+      -webkit-user-drag:none;
+      pointer-events:none;
     }
 
-    .hint{
-      position:fixed;
-      left:50%;
-      bottom:22px;
-      transform:translateX(-50%);
-      z-index:20;
-      font-size:12px;
-      opacity:.55;
-      padding:10px 14px;
-      border:1px solid rgba(0,0,0,.14);
-      border-radius:999px;
-      background: rgba(255,255,255,.6);
-      backdrop-filter: blur(10px);
-      user-select:none;
+    /* шолом зверху, але він зараз НЕ видно (нема файла) */
+    .helmet{
+      opacity:0; /* поки що вимкнено */
     }
   </style>
 </head>
-
 <body>
   <div class="bg" aria-hidden="true"></div>
 
-  <div class="hud">
-    <div class="logo" title="LMS">
-      <span>LMS</span>
-      <span>MAP</span>
-    </div>
-
-    <div class="rightControls">
-      <button class="btnStore" type="button">STORE</button>
-      <button class="btnIcon" type="button" aria-label="Menu">≡</button>
-    </div>
-  </div>
-
   <div class="stage">
-    <div class="portraitWrap" aria-label="Hero portrait">
+    <div class="hero" id="hero">
       <img src="assets/portrait.png" alt="Portrait">
+      <!-- next step: <img class="helmet" src="assets/helmet.png" alt="Helmet"> -->
     </div>
   </div>
-
-  <div class="hint">Крок 2 готовий: є портрет. Далі — додамо “шолом” поверх.</div>
 </body>
 </html>
