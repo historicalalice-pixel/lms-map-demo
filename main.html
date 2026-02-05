@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LMS — Main</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#05070d;color:#e8eefc}
+  body{overflow:hidden}
+
+  /* ====== subtle grain overlay ====== */
+  .grain{
+    position:fixed; inset:0; pointer-events:none; z-index:30;
+    opacity:.10;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+    mix-blend-mode:overlay;
+  }
+
+  /* ====== top HUD ====== */
+  .hud{
+    position:fixed; left:18px; right:18px; top:14px;
+    display:flex; align-items:center; justify-content:space-between;
+    z-index:25;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    font-size:13px;
+  }
+  .pill{
+    display:inline-flex; gap:10px; align-items:center;
+    padding:10px 14px;
+    border:1px solid rgba(232,238,252,.15);
+    border-radius:999px;
+    background:rgba(5,7,13,.22);
+    backdrop-filter: blur(10px);
+  }
+  .pill b{font-weight:600}
+  .pill a{color:#e8eefc; text-decoration:none; opacity:.85}
+  .pill a:hover{opacity:1}
+  .right{gap:12px}
+
+  /* ====== viewport & smooth drive ====== */
+  #viewport{
+    position:fixed; inset:0;
+    overflow:hidden;
+  }
+  #track{
+    position:absolute; left:0; top:0; width:100%;
+    will-change:transform;
+  }
+
+  /* ====== hero ====== */
+  .hero{
+    position:relative;
+    height:120vh;
+    display:flex;
+    align-items:flex-end;
+    padding:120px 18px 60px;
+  }
+  .hero::before{
+    content:"";
+    position:absolute; inset:0;
+    background:
+      radial-gradient(900px 700px at 50% 50%, rgba(30,60,140,.28), rgba(7,10,22,.88) 65%, #05070d 100%);
+    z-index:1;
+  }
+  .hero-media{
+    position:absolute; inset:0;
+    z-index:0;
+    overflow:hidden;
+  }
+  .hero-media img{
+    position:absolute; left:50%; top:50%;
+    width:120vw; height:120vh;
+    object-fit:cover;
+    transform:translate3d(calc(-50% + var(--px,0px)), calc(-50% + var(--py,0px)), 0) scale(1.05);
+    filter:contrast(1.05) saturate(1.02);
+    opacity:.88;
+    will-change:transform;
+  }
+  .hero-media::after{
+    content:"";
+    position:absolute; inset:-20%;
+    background:radial-gradient(800px 500px at 60% 40%, rgba(232,238,252,.10), transparent 60%);
+    transform:translate3d(var(--lx,0px), var(--ly,0px), 0);
+    opacity:.55;
+    mix-blend-mode:screen;
+    pointer-events:none;
+  }
+
+  .hero-content{
+    position:relative;
+    z-index:2;
+    width:min(980px,92vw);
+    margin:0 auto;
+    text-align:left;
+  }
+  .kicker{
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    font-size:12px;
+    opacity:.7;
+    margin-bottom:14px;
+  }
+  h1{
+    font-family:"Cormorant Garamond", serif;
+    font-weight:500;
+    font-size:clamp(52px,7vw,94px);
+    line-height:1.02;
+    margin:0 0 18px;
+    text-shadow:0 10px 44px rgba(0,0,0,.45);
+  }
+  .sub{
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    font-size:16px;
+    line-height:1.7;
+    opacity:.78;
+    max-width:56ch;
+    margin:0 0 26px;
+  }
+
+  .actions{display:flex; gap:12px; flex-wrap:wrap}
+  .btn{
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    font-size:12px;
+    padding:12px 18px;
+    border:1px solid rgba(232,238,252,.20);
+    background:rgba(232,238,252,.06);
+    color:#e8eefc;
+    cursor:pointer;
+    text-decoration:none;
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn:hover{border-color:rgba(232,238,252,.5); background:rgba(232,238,252,.10)}
+  .btn.secondary{background:transparent}
+
+  /* ====== sections ====== */
+  .section{
+    padding:90px 18px;
+    position:relative;
+  }
+  .section .inner{
+    width:min(980px,92vw);
+    margin:0 auto;
+  }
+  .section h2{
+    font-family:"Cormorant Garamond", serif;
+    font-weight:500;
+    font-size:44px;
+    margin:0 0 12px;
+  }
+  .section p{
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    opacity:.78;
+    line-height:1.7;
+    margin:0 0 18px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0,1fr));
+    gap:14px;
+    margin-top:18px;
+  }
+  .card{
+    border:1px solid rgba(232,238,252,.14);
+    background:rgba(5,7,13,.22);
+    border-radius:18px;
+    padding:16px;
+    backdrop-filter: blur(10px);
+  }
+  .card b{display:block; margin-bottom:8px}
+  .muted{opacity:.7}
+
+  /* ====== drive UI ====== */
+  .drive{
+    position:fixed;
+    left:50%; top:76px;
+    transform:translateX(-50%);
+    z-index:26;
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    font-size:12px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    opacity:.8;
+    user-select:none;
+  }
+  .tag{
+    padding:8px 12px;
+    border-radius:999px;
+    border:1px solid rgba(232,238,252,.16);
+    background:rgba(5,7,13,.18);
+    backdrop-filter: blur(10px);
+  }
+  .tag strong{letter-spacing:.18em; text-transform:uppercase; font-size:11px}
+  .tag span{opacity:.8}
+
+  /* small screens: allow normal scroll */
+  @media (max-width: 900px){
+    body{overflow:auto}
+    #viewport{position:relative}
+    #track{position:relative; transform:none !important}
+    .drive{display:none}
+    .hero{height:auto; min-height:88vh}
+    .grid{grid-template-columns:1fr}
+    .hero-media img{width:140vw; height:110vh}
+  }
+</style>
+</head>
+
+<body>
+<div class="hud">
+  <div class="pill"><b>Карта курсу</b><span class="muted">Демо</span></div>
+  <div class="pill right">
+    <a href="#demo">Demo</a>
+    <a href="#about">Про курс</a>
+    <a href="#login">Увійти</a>
+  </div>
+</div>
+
+<div class="drive" id="driveUI">
+  <div class="tag" id="lockTag"><strong>Tap to lock</strong></div>
+  <div class="tag"><span id="modeText">Scroll mode</span></div>
+</div>
+
+<div id="viewport">
+  <div id="track">
+    <!-- HERO -->
+    <section class="hero" id="top">
+      <div class="hero-media" aria-hidden="true">
+        <!-- ЗАМІНИ ЦЕ ФОТО: поклади файл assets/hero.jpg -->
+        <img id="heroImg" src="assets/hero.jpg" alt="">
+      </div>
+
+      <div class="hero-content">
+        <div class="kicker">LMS / Tutor platform</div>
+        <h1>Навчайся.<br>Рухайся.<br>Прогресуй.</h1>
+        <p class="sub">
+          Це демонстраційна головна сторінка в стилі “кінематографічного драйву”.
+          Тут буде коротка презентація курсу, демо-урок і вхід у кабінет.
+        </p>
+
+        <div class="actions">
+          <a class="btn" href="#demo">Демо-урок</a>
+          <a class="btn secondary" href="#about">Про курс</a>
+          <a class="btn secondary" href="#login">Увійти</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEMO -->
+    <section class="section" id="demo">
+      <div class="inner">
+        <h2>Демо-урок</h2>
+        <p>Один відкритий урок для знайомства з форматом (відео/текст + тест).</p>
+        <div class="grid">
+          <div class="card">
+            <b>1) Теорія</b>
+            <div class="muted">Короткий матеріал + ключові поняття.</div>
+          </div>
+          <div class="card">
+            <b>2) Практика</b>
+            <div class="muted">Питання/вправи для закріплення.</div>
+          </div>
+          <div class="card">
+            <b>3) Міні-тест</b>
+            <div class="muted">Результат зберігається після входу.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="section" id="about">
+      <div class="inner">
+        <h2>Про курс</h2>
+        <p>
+          Тут ми покажемо “публічну історію” курсу: етапи, теми, приклади сертифіката.
+          Повний доступ — після запрошення від репетитора.
+        </p>
+        <div class="grid">
+          <div class="card"><b>Прогрес</b><div class="muted">Видно пройдені уроки і тести.</div></div>
+          <div class="card"><b>Контроль</b><div class="muted">Репетитор може відкрити/закрити уроки, дати перескладання.</div></div>
+          <div class="card"><b>Сертифікат</b><div class="muted">Після підтвердження репетитора.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOGIN -->
+    <section class="section" id="login">
+      <div class="inner">
+        <h2>Увійти</h2>
+        <p>Тут буде форма входу / інвайт-посилання. Поки — заглушка.</p>
+        <a class="btn" href="./index.html">Повернутись на стартову</a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="inner">
+        <p class="muted">© 2026 • LMS Demo</p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="grain"></div>
+
+<script>
+  // ====== Smooth “drive” scroll (desktop) ======
+  const prefersMobile = window.matchMedia('(max-width: 900px)').matches;
+  if (prefersMobile) {
+    // on mobile we allow natural scroll
+  } else {
+    const track = document.getElementById('track');
+    const modeText = document.getElementById('modeText');
+    const lockTag = document.getElementById('lockTag');
+    const heroImg = document.getElementById('heroImg');
+
+    let targetY = 0;
+    let y = 0;
+    let maxY = 0;
+
+    let locked = false;
+
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+    function recalc(){
+      // height of content - viewport
+      maxY = Math.max(0, track.scrollHeight - window.innerHeight);
+      targetY = clamp(targetY, 0, maxY);
+      y = clamp(y, 0, maxY);
+    }
+    window.addEventListener('resize', recalc);
+    window.addEventListener('load', recalc);
+    setTimeout(recalc, 50);
+
+    // wheel controls targetY
+    window.addEventListener('wheel', (e)=>{
+      // allow anchor clicks to work: if user is over links, let default happen
+      e.preventDefault();
+      const speed = locked ? 0.85 : 0.65;
+      targetY = clamp(targetY + e.deltaY * speed, 0, maxY);
+    }, {passive:false});
+
+    // mouse parallax on hero image
+    let mx = 0, my = 0;
+    window.addEventListener('mousemove', (e)=>{
+      mx = (e.clientX / window.innerWidth - 0.5);
+      my = (e.clientY / window.innerHeight - 0.5);
+    });
+
+    // “tap to lock” – NOT true pointer lock, just mode toggle (safer)
+    lockTag.addEventListener('click', ()=>{
+      locked = !locked;
+      modeText.textContent = locked ? 'Locked drive (ESC to exit)' : 'Scroll mode';
+      lockTag.querySelector('strong').textContent = locked ? 'Locked' : 'Tap to lock';
+    });
+
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape' && locked){
+        locked = false;
+        modeText.textContent = 'Scroll mode';
+        lockTag.querySelector('strong').textContent = 'Tap to lock';
+      }
+    });
+
+    // anchor links: translate targetY to section position
+    document.querySelectorAll('a[href^="#"]').forEach(a=>{
+      a.addEventListener('click', (e)=>{
+        const id = a.getAttribute('href');
+        const el = document.querySelector(id);
+        if(!el) return;
+        e.preventDefault();
+        // compute element top relative to track
+        const rect = el.getBoundingClientRect();
+        // current visual offset is -y, so element's real position in track is (rect.top + y)
+        const topInTrack = rect.top + y;
+        targetY = clamp(topInTrack - 40, 0, maxY);
+      });
+    });
+
+    function raf(){
+      // inertia
+      y += (targetY - y) * 0.08;
+      if (Math.abs(targetY - y) < 0.1) y = targetY;
+
+      track.style.transform = `translate3d(0, ${-y}px, 0)`;
+
+      // hero parallax based on scroll + mouse
+      const scrollFactor = clamp(y / 600, 0, 1.6);
+      const px = mx * 32;
+      const py = my * 22 - scrollFactor * 22;
+
+      // light sweep
+      const lx = mx * 40;
+      const ly = my * 26;
+
+      document.documentElement.style.setProperty('--px', px + 'px');
+      document.documentElement.style.setProperty('--py', py + 'px');
+      document.documentElement.style.setProperty('--lx', lx + 'px');
+      document.documentElement.style.setProperty('--ly', ly + 'px');
+
+      requestAnimationFrame(raf);
+    }
+    raf();
+  }
+</script>
+</body>
+</html>
