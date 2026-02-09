@@ -6,148 +6,152 @@
 <title>LMS — Intro</title>
 
 <style>
-  @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap");
-  * {
-    box-sizing: border-box;
-  }
-  html,
-  body {
-    margin: 0;
-    height: 100%;
-    background: #040404;
-    color: #f5f5f5;
-    overflow: hidden;
-    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#05070d;color:#e8eefc;font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;scroll-behavior:smooth}
+  body{overflow-x:hidden}
+
+  :root{
+    --bg:#05070d;
+    --glow:rgba(255,255,255,0.08);
+    --muted:rgba(232,238,252,.7);
   }
 
   /* ====== INTRO ====== */
-  #intro {
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(800px 520px at 50% 35%, rgba(255, 255, 255, 0.06), transparent 70%),
-      #040404;
-    overflow: hidden;
+  #intro{
+    position:relative;
+    min-height:100svh;
+    background:
+      radial-gradient(900px 520px at 50% 40%, rgba(255,255,255,.08), transparent 70%),
+      radial-gradient(800px 500px at 20% 80%, rgba(120,140,210,.18), transparent 70%),
+      #05070d;
+    overflow:hidden;
   }
 
-  #stage {
-    position: absolute;
-    inset: 0;
-    perspective: 1200px;
-    transform-style: preserve-3d;
+  #stage{position:absolute; inset:0; perspective:1200px; transform-style:preserve-3d;}
+  #cloud{position:absolute; inset:-20%; transform-style:preserve-3d;}
+
+  .grain{
+    position:absolute; inset:0;
+    background-image:url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"%3E%3Crect width="1" height="1" fill="%23ffffff" fill-opacity="0.4"/%3E%3C/svg%3E');
+    opacity:.12; mix-blend-mode:soft-light; pointer-events:none;
   }
 
-  #cloud {
-    position: absolute;
-    inset: -20%;
-    transform-style: preserve-3d;
-    opacity: 0.9;
+  .intro-content{
+    position:relative;
+    min-height:100svh;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    width:min(920px,92vw);
+    margin:0 auto;
+    z-index:5;
+    pointer-events:auto;
   }
 
-  .intro-content {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    width: min(720px, 88vw);
-    z-index: 5;
-    pointer-events: auto;
+  .mark{
+    width:58px; height:58px; border:1px solid rgba(255,255,255,.22);
+    display:grid; place-items:center; margin:0 auto 22px;
+  }
+  .mark svg{width:26px; height:26px; fill:none; stroke:#f5f5f5; stroke-width:1.4;}
+
+  h1{
+    font-family:"Cormorant Garamond", serif;
+    font-weight:500;
+    font-size:clamp(44px,6vw,86px);
+    letter-spacing:.02em;
+    margin:0 0 16px;
+    color:#f4f0ea;
   }
 
-  .mark {
-    width: 58px;
-    height: 58px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    display: grid;
-    place-items: center;
-    margin: 0 auto 22px;
+  p{
+    font-weight:400;
+    opacity:.75;
+    line-height:1.6;
+    margin:0 0 26px;
+    font-size:clamp(14px,1.4vw,16px);
   }
 
-  .mark svg {
-    width: 26px;
-    height: 26px;
-    fill: none;
-    stroke: #f5f5f5;
-    stroke-width: 1.4;
+  #enterBtn{
+    font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    font-size:12px;
+    padding:14px 36px;
+    background:#f5f5f5;
+    color:#111;
+    border:1px solid transparent;
+    border-radius:999px;
+    cursor:pointer;
+    transition:transform .2s ease, box-shadow .2s ease;
+  }
+  #enterBtn:hover{transform:translateY(-1px); box-shadow:0 10px 24px rgba(0,0,0,.35);} 
+  #enterBtn:active{transform:translateY(0px) scale(.99);} 
+
+  .hint{
+    position:fixed; left:18px; bottom:14px;
+    font-size:12px; opacity:.45;
+    z-index:6; user-select:none;
   }
 
-  h1 {
-    font-family: "Cormorant Garamond", serif;
-    font-weight: 500;
-    font-size: clamp(42px, 6vw, 80px);
-    letter-spacing: 0.02em;
-    margin: 0 0 18px;
-    color: #f4f0ea;
+  /* load animation */
+  .reveal{
+    opacity:0; transform:translateY(18px); filter:blur(8px);
+    animation:reveal 1.2s ease forwards;
   }
+  .reveal.delay-1{animation-delay:.15s}
+  .reveal.delay-2{animation-delay:.3s}
+  .reveal.delay-3{animation-delay:.45s}
 
-  p {
-    font-weight: 300;
-    opacity: 0.75;
-    line-height: 1.7;
-    margin: 0 auto 30px;
-    font-size: clamp(14px, 1.4vw, 16px);
-    max-width: 520px;
-  }
-
-  #enterBtn {
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    font-size: 12px;
-    padding: 12px 34px;
-    background: #f5f5f5;
-    color: #111;
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  #enterBtn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-  }
-
-  #enterBtn:active {
-    transform: translateY(0px) scale(0.99);
-  }
-
-  .credit {
-    margin-top: 18px;
-    font-size: 12px;
-    opacity: 0.6;
-  }
-
-  /* Fade overlay for transition */
-  #fadeOverlay {
-    position: fixed;
-    inset: 0;
-    background: #040404;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.75s ease;
-    z-index: 10;
-  }
-
-  .hint {
-    position: fixed;
-    left: 18px;
-    bottom: 14px;
-    font-size: 12px;
-    opacity: 0.4;
-    z-index: 6;
-    user-select: none;
+  @keyframes reveal{
+    to{opacity:1; transform:translateY(0); filter:blur(0)}
   }
 
   /* floating tiles */
-  .tile {
-    position: absolute;
-    width: var(--size, 18px);
-    height: var(--size, 18px);
-    background: rgba(255, 255, 255, 0.22);
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.18);
-    transform: translate3d(var(--x, 0px), var(--y, 0px), var(--z, 0px)) rotate(var(--r, 0deg));
-    will-change: transform, opacity;
-    pointer-events: none;
-    border-radius: 2px;
+  .tile{
+    position:absolute;
+    width:var(--size,18px); height:var(--size,18px);
+    background:rgba(255,255,255,.2);
+    box-shadow:0 0 10px rgba(255,255,255,.15);
+    border-radius:2px;
+    transform:translate3d(var(--x,0px), var(--y,0px), var(--z,0px)) rotate(var(--r,0deg));
+    will-change:transform, opacity;
+    pointer-events:none;
+  }
+
+  @keyframes shimmer{
+    0%{transform:translate3d(0,0,0) scale(1); opacity:.4}
+    50%{transform:translate3d(0,-10px,0) scale(1.04); opacity:.85}
+    100%{transform:translate3d(0,0,0) scale(1); opacity:.4}
+  }
+
+  .ambient{
+    position:absolute; inset:0;
+    background:radial-gradient(circle at center, rgba(255,255,255,.12), transparent 65%);
+    animation:shimmer 16s ease-in-out infinite;
+    pointer-events:none;
+  }
+
+  /* sections */
+  section{position:relative; padding:120px 0;}
+  .section-wrap{width:min(1000px,90vw); margin:0 auto;}
+  .eyebrow{font-size:11px; text-transform:uppercase; letter-spacing:.3em; opacity:.55; margin-bottom:14px;}
+  .section-title{font-family:"Cormorant Garamond", serif; font-size:clamp(28px,4vw,48px); margin:0 0 12px;}
+  .section-text{max-width:640px; color:var(--muted); line-height:1.7;}
+
+  .card-grid{display:grid; gap:18px; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); margin-top:26px;}
+  .card{border:1px solid rgba(255,255,255,.1); border-radius:18px; padding:18px; background:rgba(255,255,255,.02)}
+  .card small{text-transform:uppercase; letter-spacing:.2em; font-size:10px; opacity:.6}
+
+  /* scroll reveal */
+  .reveal-on-scroll{opacity:0; transform:translateY(30px); filter:blur(6px); transition:all .9s ease;}
+  .reveal-on-scroll.is-visible{opacity:1; transform:translateY(0); filter:blur(0)}
+
+  /* spacing + footer */
+  #cta{padding-bottom:160px}
+  .cta-box{border:1px solid rgba(255,255,255,.18); border-radius:28px; padding:48px; text-align:center; background:rgba(255,255,255,.03)}
+
+  @media (max-width:720px){
+    .hint{display:none}
   }
 </style>
 </head>
@@ -155,23 +159,64 @@
 <body>
 <div id="intro">
   <div id="stage"><div id="cloud"></div></div>
+  <div class="grain"></div>
+  <div class="ambient"></div>
 
   <div class="intro-content" id="center">
-    <div class="mark" aria-hidden="true">
+    <div class="mark reveal" aria-hidden="true">
       <svg viewBox="0 0 24 24">
         <path d="M12 6.5c0-2 1.7-3.5 3.6-3.5 1.9 0 3.4 1.5 3.4 3.4 0 2.4-2.4 3.6-4.2 3.6" />
         <path d="M8.5 9.5c-1.8 0-3.3 1.5-3.3 3.3 0 2.6 3.2 4.8 6.3 4.8" />
         <path d="M10.5 21c0-3.2 2.2-6.2 5.2-6.2 2.2 0 3.8 1.3 4.3 3.3" />
       </svg>
     </div>
-    <h1>Навчання — це подорож</h1>
-    <p>Перед тобою історія курсу.<br>Це лише вступ. Далі — глибше.</p>
-    <button id="enterBtn">ПОЧАТИ</button>
+    <h1 class="reveal delay-1">Навчання — це подорож</h1>
+    <p class="reveal delay-2">Перед тобою історія курсу.<br>Це лише вступ. Далі — глибше.</p>
+    <button id="enterBtn" class="reveal delay-3">ПОЧАТИ</button>
   </div>
 </div>
 
-<div id="fadeOverlay"></div>
-<div class="hint">ПОЧАТИ → перехід на головну</div>
+<div class="hint">ПОЧАТИ → скрол до розділів</div>
+
+<section id="teachers">
+  <div class="section-wrap reveal-on-scroll">
+    <div class="eyebrow">For teachers</div>
+    <h2 class="section-title">Створюй курси як кінорозповідь</h2>
+    <p class="section-text">Конструктор модулів, відео, PDF та тестів дозволяє будувати маршрут навчання з точністю до теми, події та персоналії.</p>
+    <div class="card-grid">
+      <div class="card"><small>курси</small><div>Модулі, уроки, матеріали</div></div>
+      <div class="card"><small>тести</small><div>Одна/декілька відповідей, текст, співставлення</div></div>
+      <div class="card"><small>аналітика</small><div>Результати групи в реальному часі</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="students">
+  <div class="section-wrap reveal-on-scroll">
+    <div class="eyebrow">For students</div>
+    <h2 class="section-title">Навчайся в ритмі власного прогресу</h2>
+    <p class="section-text">Календар, прогрес, підказки та персональна траєкторія навчання — усе в одному кабінеті.</p>
+  </div>
+</section>
+
+<section id="interactive">
+  <div class="section-wrap reveal-on-scroll">
+    <div class="eyebrow">Interactive lessons</div>
+    <h2 class="section-title">Події на мапі. Постаті в контексті</h2>
+    <p class="section-text">Інтерактивні карти, хронологія та ключові персоналії перетворюють підготовку на занурення.</p>
+  </div>
+</section>
+
+<section id="cta">
+  <div class="section-wrap reveal-on-scroll">
+    <div class="cta-box">
+      <div class="eyebrow">Ready to begin</div>
+      <h2 class="section-title">Відкрий свій маршрут підготовки до НМТ вже сьогодні</h2>
+      <p class="section-text" style="margin:0 auto 22px">Отримай доступ до курсів, живих сесій та персональної аналітики — усе в одному місці.</p>
+      <button id="ctaBtn" class="reveal delay-1" style="animation-delay:.1s">Start learning</button>
+    </div>
+  </div>
+</section>
 
 <script>
   // ====== INTRO: floating tiles ======
@@ -179,20 +224,20 @@
 
   function rand(min, max){ return min + Math.random()*(max-min); }
 
-  const TILES_COUNT = 120;
+  const TILES_COUNT = 90;
   const tiles = [];
 
   for(let i=0;i<TILES_COUNT;i++){
     const el = document.createElement('div');
     el.className = 'tile';
-    const size = rand(12, 32);
+    const size = rand(10, 28);
     el.style.setProperty('--size', `${size}px`);
     cloud.appendChild(el);
 
-    const r = rand(140, 560);
-    const a = rand(0, Math.PI * 2);
-    const x0 = Math.cos(a) * r + rand(-120, 120);
-    const y0 = Math.sin(a) * r + rand(-80, 80);
+    const r = rand(140, 520);
+    const a = rand(0, Math.PI*2);
+    const x0 = Math.cos(a)*r + rand(-120,120);
+    const y0 = Math.sin(a)*r + rand(-80,80);
     const z0 = rand(-260, 260);
 
     tiles.push({
@@ -202,10 +247,10 @@
       vx: rand(-0.05, 0.05),
       vy: rand(-0.04, 0.04),
       vz: rand(-0.03, 0.03),
-      o: rand(0.18, 0.42),
+      o: rand(0.12, 0.35),
       r: rand(0, 360),
-      vr: rand(-0.3, 0.3),
-      pulse: rand(0, Math.PI * 2),
+      vr: rand(-0.25, 0.25),
+      pulse: rand(0, Math.PI*2),
       pr: rand(0.003, 0.01)
     });
 
@@ -220,13 +265,11 @@
   });
 
   function tick(){
-    // subtle camera drift
     const camX = mx * 40;
     const camY = my * 28;
     cloud.style.transform = `translate3d(${camX}px,${camY}px,0) rotateX(${(-my*6)}deg) rotateY(${(mx*8)}deg)`;
 
     for(const p of tiles){
-      // gentle drift + soft bounds
       p.x += p.vx; p.y += p.vy; p.z += p.vz;
       const dx = p.x - p.x0, dy = p.y - p.y0, dz = p.z - p.z0;
       p.x -= dx * 0.002; p.y -= dy * 0.002; p.z -= dz * 0.002;
@@ -241,15 +284,22 @@
   }
   tick();
 
-  // ====== Transition to MAIN ======
+  // ====== CTA scroll ======
   const enterBtn = document.getElementById('enterBtn');
-  const fade = document.getElementById('fadeOverlay');
-
   enterBtn.addEventListener('click', ()=>{
-    fade.style.opacity = '1';
-    // коротка пауза під fade, потім перехід
-    setTimeout(()=>{ window.location.href = './main.html'; }, 650);
+    const next = document.getElementById('teachers');
+    if(next){ next.scrollIntoView({behavior:'smooth'}); }
   });
+
+  // ====== Scroll reveal ======
+  const revealEls = document.querySelectorAll('.reveal-on-scroll');
+  const observer = new IntersectionObserver((entries)=>{
+    entries.forEach((entry)=>{
+      if(entry.isIntersecting){ entry.target.classList.add('is-visible'); }
+    });
+  }, { threshold: 0.2 });
+
+  revealEls.forEach(el=>observer.observe(el));
 </script>
 </body>
 </html>
