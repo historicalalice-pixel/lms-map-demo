@@ -1,79 +1,448 @@
 <!doctype html>
 <html lang="uk">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hero</title>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LMS | НМТ з історії</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap");
 
-  <style>
-    :root{
-      --bg: #f4f4f1;
+      :root {
+        --bg: #f6f1ea;
+        --ink: #17141f;
+        --muted: #6d6878;
+        --line: #e0dad0;
+        --accent: #e26d5c;
+        --accent-dark: #c45646;
+        --card: #ffffff;
+      }
 
-      /* spotlight position */
-      --spotX: 50%;
-      --spotY: 45%;
+      * {
+        box-sizing: border-box;
+      }
 
-      /* spotlight size */
-      --spotR: 150px; /* радіус */
-      --soft: 60px;   /* м’який край */
-    }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "Inter", system-ui, -apple-system, Segoe UI, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
 
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; margin:0; }
-    body{
-      background: var(--bg);
-      overflow:hidden;
-    }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
 
-    /* легкий фон (дуже м’яко, можна прибрати) */
-    .bg{
-      position:fixed; inset:0;
-      background:
-        radial-gradient(900px 600px at 50% 50%, rgba(0,0,0,.03), transparent 72%);
-      pointer-events:none;
-    }
+      .shell {
+        width: min(1200px, 92vw);
+        margin: 0 auto;
+      }
 
-    /* центр */
-    .stage{
-      position:fixed; inset:0;
-      display:grid;
-      place-items:center;
-    }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: color-mix(in srgb, var(--bg) 90%, transparent);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--line);
+      }
 
-    /* кругла “маска” як у референсі */
-    .hero{
-      width:min(640px, 82vw);
-      aspect-ratio: 1 / 1;
-      border-radius:999px;
-      overflow:hidden;
-      position:relative;
-      background: rgba(255,255,255,.2);
-      filter: drop-shadow(0 22px 55px rgba(0,0,0,.12));
-    }
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 0;
+      }
 
-    .hero img{
-      position:absolute; inset:0;
-      width:100%; height:100%;
-      object-fit:cover;
-      user-select:none;
-      -webkit-user-drag:none;
-      pointer-events:none;
-    }
+      .logo {
+        font-family: "Cormorant Garamond", serif;
+        font-size: 26px;
+        letter-spacing: 0.06em;
+      }
 
-    /* шолом зверху, але він зараз НЕ видно (нема файла) */
-    .helmet{
-      opacity:0; /* поки що вимкнено */
-    }
-  </style>
-</head>
-<body>
-  <div class="bg" aria-hidden="true"></div>
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
 
-  <div class="stage">
-    <div class="hero" id="hero">
-      <img src="assets/portrait.png" alt="Portrait">
-      <!-- next step: <img class="helmet" src="assets/helmet.png" alt="Helmet"> -->
-    </div>
-  </div>
-</body>
+      .nav-cta {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .button {
+        padding: 12px 20px;
+        border: 1px solid var(--line);
+        font-size: 13px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .button.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+      }
+
+      .button.primary:hover {
+        background: var(--accent-dark);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 40px;
+        align-items: center;
+        padding: 72px 0 40px;
+      }
+
+      .hero h1 {
+        font-family: "Cormorant Garamond", serif;
+        font-size: clamp(36px, 4.5vw, 64px);
+        margin: 0 0 20px;
+      }
+
+      .hero p {
+        color: var(--muted);
+        line-height: 1.7;
+        margin-bottom: 28px;
+      }
+
+      .hero-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 16px;
+      }
+
+      .meta-card {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--card) 90%, var(--bg));
+      }
+
+      .meta-card h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+
+      .meta-card span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .portrait-frame {
+        border-radius: 999px;
+        overflow: hidden;
+        width: min(420px, 78vw);
+        aspect-ratio: 1 / 1;
+        margin: 0 auto;
+        border: 14px solid #fdfbf7;
+        box-shadow: 0 25px 60px rgba(23, 20, 31, 0.18);
+        background: #fff;
+      }
+
+      .portrait-frame img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      section {
+        padding: 40px 0;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 20px;
+      }
+
+      .section-title h2 {
+        font-family: "Cormorant Garamond", serif;
+        font-size: clamp(28px, 3vw, 40px);
+        margin: 0;
+      }
+
+      .section-title p {
+        color: var(--muted);
+        margin: 0;
+        max-width: 460px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .grid.cols-3 {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+
+      .grid.cols-2 {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .card {
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        padding: 20px;
+        display: grid;
+        gap: 10px;
+        min-height: 140px;
+      }
+
+      .card small {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 11px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #f7efe6;
+        color: var(--accent);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .dashboard {
+        background: #fdfbf7;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+      }
+
+      .list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .list-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+        font-size: 14px;
+      }
+
+      footer {
+        padding: 32px 0 60px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      @media (max-width: 720px) {
+        .nav-links {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="shell nav">
+        <div class="logo">LMS історії</div>
+        <nav class="nav-links">
+          <a href="#courses">Курси</a>
+          <a href="#dashboard">Кабінет</a>
+          <a href="#teacher">Викладач</a>
+          <a href="#contact">Контакти</a>
+        </nav>
+        <div class="nav-cta">
+          <button class="button">Гість</button>
+          <button class="button primary">Увійти</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <span class="tag">НМТ • історія України та світу</span>
+          <h1>Навчайся системно та готуйся до НМТ з історії разом із викладачкою.</h1>
+          <p>
+            Курси, тести, аналітика та щоденні Zoom-заняття в одному кабінеті. Обирай курс,
+            відстежуй прогрес і готуйся до іспиту з упевненістю.
+          </p>
+          <div class="nav-cta">
+            <button class="button primary">Почати навчання</button>
+            <button class="button">Подивитися програму</button>
+          </div>
+          <div class="hero-meta">
+            <div class="meta-card">
+              <h3>100+ учнів</h3>
+              <span>персональні траєкторії</span>
+            </div>
+            <div class="meta-card">
+              <h3>Щоденні Zoom</h3>
+              <span>живі заняття без запису</span>
+            </div>
+            <div class="meta-card">
+              <h3>Сертифікат</h3>
+              <span>після 100% прогресу</span>
+            </div>
+          </div>
+        </div>
+        <div class="portrait-frame">
+          <img src="assets/portrait.png" alt="Викладачка історії" />
+        </div>
+      </section>
+    </main>
+
+    <section id="courses">
+      <div class="shell">
+        <div class="section-title">
+          <h2>Курси та контент</h2>
+          <p>Готові модулі з історії України та світу: відео, PDF-конспекти, інтерактивні мапи.</p>
+        </div>
+        <div class="grid cols-3">
+          <article class="card">
+            <small>курс</small>
+            <strong>Історія України: від княжої доби до сьогодення</strong>
+            <span>30 тем • 120 уроків</span>
+          </article>
+          <article class="card">
+            <small>курс</small>
+            <strong>Всесвітня історія: ключові події та постаті</strong>
+            <span>25 тем • 90 уроків</span>
+          </article>
+          <article class="card">
+            <small>модулі</small>
+            <strong>Інтерактивна карта подій та персоналій</strong>
+            <span>Хронологія, мапи, постаті</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="dashboard" class="dashboard">
+      <div class="shell">
+        <div class="section-title">
+          <h2>Кабінет учня</h2>
+          <p>Все для щоденної підготовки: прогрес, календар, повідомлення, статистика та карта тем.</p>
+        </div>
+        <div class="dashboard-grid">
+          <div class="card">
+            <small>прогрес</small>
+            <strong>72% курсу пройдено</strong>
+            <span>Щотижневий план: 5 уроків</span>
+          </div>
+          <div class="card">
+            <small>наступні заняття</small>
+            <strong>Сьогодні 18:00</strong>
+            <span>Тема: Українська революція</span>
+          </div>
+          <div class="card">
+            <small>статистика</small>
+            <strong>Середній результат: 84%</strong>
+            <span>12 тестів за тиждень</span>
+          </div>
+          <div class="card">
+            <small>повідомлення</small>
+            <strong>3 нові повідомлення</strong>
+            <span>Оновлені матеріали уроку</span>
+          </div>
+        </div>
+        <div class="grid cols-2" style="margin-top: 20px;">
+          <div class="card">
+            <small>інтерактивна карта</small>
+            <strong>Хронологія та події</strong>
+            <div class="list">
+              <div class="list-item"><span>1917–1921</span><span>Революція</span></div>
+              <div class="list-item"><span>1939–1945</span><span>Друга світова</span></div>
+              <div class="list-item"><span>1991</span><span>Незалежність</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <small>постаті та події</small>
+            <strong>Ключові персоналії теми</strong>
+            <div class="list">
+              <div class="list-item"><span>Б. Хмельницький</span><span>1654</span></div>
+              <div class="list-item"><span>М. Грушевський</span><span>1917</span></div>
+              <div class="list-item"><span>В. Чорновіл</span><span>1989</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="teacher">
+      <div class="shell">
+        <div class="section-title">
+          <h2>Кабінет викладача</h2>
+          <p>Створення курсів, перевірка тестів, аналітика та завантаження матеріалів у кілька кліків.</p>
+        </div>
+        <div class="grid cols-3">
+          <article class="card">
+            <small>курси</small>
+            <strong>Створення модулів і уроків</strong>
+            <span>Відео, PDF, інтерактивні вправи</span>
+          </article>
+          <article class="card">
+            <small>тести</small>
+            <strong>Усі типи запитань</strong>
+            <span>Одна/декілька відповідей, текст, співставлення</span>
+          </article>
+          <article class="card">
+            <small>аналітика</small>
+            <strong>Результати групи</strong>
+            <span>Детальна статистика успішності</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact">
+      <div class="shell">
+        <div class="section-title">
+          <h2>Оплата та доступ</h2>
+          <p>Оплата на ФОП-рахунок після уроку. Доступ відкривається одразу після підтвердження.</p>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <small>платежі</small>
+            <strong>Гнучка оплата після заняття</strong>
+            <span>Підходить для індивідуального та групового навчання</span>
+          </div>
+          <div class="card">
+            <small>сертифікат</small>
+            <strong>Брендований сертифікат</strong>
+            <span>Видається після 100% проходження курсів</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="shell">
+        LMS історії • Підготовка до НМТ • Zoom щодня • ua/en
+      </div>
+    </footer>
+  </body>
 </html>
