@@ -142,6 +142,7 @@
     width: var(--size, 18px);
     height: var(--size, 18px);
     background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.08);
     transform: translate3d(var(--x, 0px), var(--y, 0px), var(--z, 0px)) rotate(var(--r, 0deg));
     will-change: transform, opacity;
     pointer-events: none;
@@ -176,7 +177,7 @@
 
   function rand(min, max){ return min + Math.random()*(max-min); }
 
-  const TILES_COUNT = 70;
+  const TILES_COUNT = 80;
   const tiles = [];
 
   for(let i=0;i<TILES_COUNT;i++){
@@ -200,7 +201,10 @@
       vy: rand(-0.04, 0.04),
       vz: rand(-0.03, 0.03),
       o: rand(0.12, 0.3),
-      r: rand(0, 360)
+      r: rand(0, 360),
+      vr: rand(-0.3, 0.3),
+      pulse: rand(0, Math.PI * 2),
+      pr: rand(0.003, 0.01)
     });
 
     el.style.opacity = tiles[i]?.o ?? 0.2;
@@ -225,7 +229,10 @@
       const dx = p.x - p.x0, dy = p.y - p.y0, dz = p.z - p.z0;
       p.x -= dx * 0.002; p.y -= dy * 0.002; p.z -= dz * 0.002;
 
-      p.el.style.opacity = p.o;
+      p.r += p.vr;
+      p.pulse += p.pr;
+      const flicker = 0.6 + Math.sin(p.pulse) * 0.4;
+      p.el.style.opacity = p.o * flicker;
       p.el.style.transform = `translate3d(${p.x}px,${p.y}px,${p.z}px) rotate(${p.r}deg)`;
     }
     requestAnimationFrame(tick);
