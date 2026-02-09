@@ -1,3 +1,5 @@
+"use client";
+
 import { CTA } from "../components/CTA";
 import { FloatingElements } from "../components/FloatingElements";
 import { Hero } from "../components/Hero";
@@ -14,6 +16,7 @@ export default function Page() {
       <Hero />
 
       <ScrollSection
+        id="teachers"
         eyebrow="For Teachers"
         title="Створюй курси як кінорозповідь."
         description="Конструктор модулів, відео та матеріалів дозволяє зібрати маршрут навчання з точністю до теми та події."
@@ -35,6 +38,7 @@ export default function Page() {
       </ScrollSection>
 
       <ScrollSection
+        id="students"
         eyebrow="For Students"
         title="Навчайся в ритмі власного прогресу."
         description="Курси, інтерактивні мапи та планер занять, що підлаштовується під твій графік і підсилює результат."
@@ -45,12 +49,14 @@ export default function Page() {
       </ScrollSection>
 
       <ScrollSection
+        id="interactive"
         eyebrow="Interactive Lessons"
         title="Події на мапі. Постаті в контексті."
         description="Хронологія, ключові дати та інтерактивні історичні карти перетворюють підготовку на занурення."
       />
 
       <ScrollSection
+        id="analytics"
         eyebrow="Progress & Analytics"
         title="Аналітика, яка показує шлях."
         description="Детальні звіти, сильні та слабкі теми, рекомендації наступних кроків — усе для впевненого результату."

@@ -1,9 +1,10 @@
 "use client";
 
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, useScroll, useTransform } from "framer-motion";
 import { ReactNode, useRef } from "react";
 
 type ScrollSectionProps = {
+  id?: string;
   eyebrow: string;
   title: string;
   description: string;
@@ -11,6 +12,7 @@ type ScrollSectionProps = {
 };
 
 export function ScrollSection({
+  id,
   eyebrow,
   title,
   description,
@@ -18,9 +20,19 @@ export function ScrollSection({
 }: ScrollSectionProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const isInView = useInView(ref, { amount: 0.4, once: false });
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "end start"],
+  });
+  const y = useTransform(scrollYProgress, [0, 1], [40, -20]);
 
   return (
-    <section className="relative px-6 py-28 md:py-36">
+    <section id={id} className="relative px-6 py-28 md:py-36">
+      <motion.div
+        aria-hidden="true"
+        style={{ y }}
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_70%)]"
+      />
       <motion.div
         ref={ref}
         animate={
