@@ -12,6 +12,34 @@ export function Hero() {
 
   return (
     <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-6 pb-24 pt-28">
+      <style jsx>{`
+        @keyframes shimmer {
+          0% {
+            transform: translate3d(0, 0, 0) scale(1);
+            opacity: 0.6;
+          }
+          50% {
+            transform: translate3d(0, -12px, 0) scale(1.05);
+            opacity: 0.9;
+          }
+          100% {
+            transform: translate3d(0, 0, 0) scale(1);
+            opacity: 0.6;
+          }
+        }
+
+        @keyframes floatSlow {
+          0% {
+            transform: translate3d(0, 0, 0);
+          }
+          50% {
+            transform: translate3d(0, -16px, 0);
+          }
+          100% {
+            transform: translate3d(0, 0, 0);
+          }
+        }
+      `}</style>
       <motion.div
         className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.14),_transparent_60%)]"
         animate={{ opacity: [0.4, 0.8, 0.4], scale: [1, 1.05, 1] }}
@@ -22,7 +50,19 @@ export function Hero() {
         animate={{ opacity: [0.35, 0.7, 0.35], scale: [1, 1.06, 1] }}
         transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
       />
+      <div
+        className="absolute left-[12%] top-[18%] h-14 w-14 rounded-full border border-white/15 bg-white/5 shadow-[0_0_28px_rgba(255,255,255,0.18)]"
+        style={{ animation: "floatSlow 14s ease-in-out infinite" }}
+      />
+      <div
+        className="absolute right-[16%] top-[30%] h-8 w-8 rounded-full border border-white/10 bg-white/5 shadow-[0_0_20px_rgba(255,255,255,0.12)]"
+        style={{ animation: "floatSlow 18s ease-in-out infinite 1.5s" }}
+      />
       <div className="absolute inset-0 opacity-[0.15] mix-blend-soft-light [background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22 viewBox=%220 0 50 50%22%3E%3Crect width=%221%22 height=%221%22 fill=%22%23ffffff%22 fill-opacity=%220.5%22/%3E%3C/svg%3E')]" />
+      <div
+        className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.12),_transparent_65%)]"
+        style={{ animation: "shimmer 16s ease-in-out infinite" }}
+      />
 
       <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col items-center text-center text-white">
         <motion.div
