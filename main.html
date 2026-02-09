@@ -3,77 +3,609 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hero</title>
-
+  <title>LMS — Повноцінна структура</title>
   <style>
+    @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600&display=swap");
+
     :root{
-      --bg: #f4f4f1;
-
-      /* spotlight position */
-      --spotX: 50%;
-      --spotY: 45%;
-
-      /* spotlight size */
-      --spotR: 150px; /* радіус */
-      --soft: 60px;   /* м’який край */
+      --bg: #0b1020;
+      --panel: rgba(18, 24, 45, 0.9);
+      --panel-2: rgba(20, 29, 58, 0.96);
+      --text: #e7ecff;
+      --muted: rgba(231, 236, 255, 0.7);
+      --accent: #6ee7ff;
+      --accent-2: #9f8bff;
+      --success: #6bffb8;
+      --warning: #ffd166;
+      --danger: #ff7b7b;
+      --line: rgba(255,255,255,0.08);
+      --shadow: 0 24px 60px rgba(6, 10, 30, 0.55);
     }
 
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; margin:0; }
+    *{ box-sizing: border-box; }
+    html, body{ height:100%; margin:0; }
     body{
-      background: var(--bg);
-      overflow:hidden;
-    }
-
-    /* легкий фон (дуже м’яко, можна прибрати) */
-    .bg{
-      position:fixed; inset:0;
+      font-family: "Manrope", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       background:
-        radial-gradient(900px 600px at 50% 50%, rgba(0,0,0,.03), transparent 72%);
-      pointer-events:none;
+        radial-gradient(1400px 900px at 10% -10%, rgba(88, 117, 255, 0.22), transparent 60%),
+        radial-gradient(1200px 800px at 90% 10%, rgba(110, 231, 255, 0.2), transparent 55%),
+        var(--bg);
+      color: var(--text);
     }
 
-    /* центр */
-    .stage{
-      position:fixed; inset:0;
-      display:grid;
-      place-items:center;
+    .app{
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
     }
 
-    /* кругла “маска” як у референсі */
-    .hero{
-      width:min(640px, 82vw);
-      aspect-ratio: 1 / 1;
-      border-radius:999px;
-      overflow:hidden;
-      position:relative;
-      background: rgba(255,255,255,.2);
-      filter: drop-shadow(0 22px 55px rgba(0,0,0,.12));
+    aside{
+      background: rgba(8, 13, 30, 0.9);
+      border-right: 1px solid var(--line);
+      padding: 28px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 26px;
     }
 
-    .hero img{
-      position:absolute; inset:0;
-      width:100%; height:100%;
-      object-fit:cover;
-      user-select:none;
-      -webkit-user-drag:none;
-      pointer-events:none;
+    .brand{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
     }
 
-    /* шолом зверху, але він зараз НЕ видно (нема файла) */
-    .helmet{
-      opacity:0; /* поки що вимкнено */
+    .brand-mark{
+      width: 40px;
+      height: 40px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid;
+      place-items: center;
+      color: #0a0f1e;
+      font-weight: 700;
+    }
+
+    .nav-group{
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav-item{
+      padding: 10px 14px;
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid transparent;
+    }
+    .nav-item.active{
+      background: rgba(110, 231, 255, 0.12);
+      border-color: rgba(110, 231, 255, 0.3);
+      color: var(--text);
+    }
+
+    .nav-pill{
+      background: rgba(255,255,255,0.12);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    .mentor-card{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+    }
+
+    .mentor-card h4{
+      margin: 0 0 10px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .mentor-card p{
+      margin: 0;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    main{
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .topbar{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 16, 34, 0.8);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .topbar h1{
+      font-family: "IBM Plex Serif", serif;
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .search{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 8px 12px;
+      width: min(320px, 40vw);
+      border: 1px solid transparent;
+    }
+
+    .search input{
+      background: transparent;
+      border: none;
+      color: var(--text);
+      outline: none;
+      width: 100%;
+      font-size: 14px;
+    }
+
+    .content{
+      padding: 28px 32px 60px;
+      display: grid;
+      gap: 24px;
+    }
+
+    .grid{
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .panel{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h3{
+      margin: 0 0 14px;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+
+    .kpi{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
+    .kpi-card{
+      background: rgba(11, 18, 36, 0.9);
+      border-radius: 18px;
+      padding: 16px;
+      border: 1px solid var(--line);
+    }
+
+    .kpi-card h4{
+      margin: 0;
+      font-size: 28px;
+      color: var(--accent);
+    }
+
+    .kpi-card span{
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .courses{
+      display: grid;
+      gap: 16px;
+    }
+
+    .course-card{
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(12, 19, 38, 0.7);
+      display: grid;
+      gap: 12px;
+    }
+
+    .course-card h4{ margin: 0; }
+
+    .tag{
+      display: inline-flex;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(110, 231, 255, 0.12);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .progress{
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.1);
+      overflow: hidden;
+    }
+    .progress span{
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .modules{
+      display: grid;
+      gap: 12px;
+    }
+
+    .module{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(10, 16, 34, 0.7);
+    }
+
+    .module small{
+      color: var(--muted);
+      display: block;
+      margin-top: 4px;
+    }
+
+    .status{
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .status.todo{ background: rgba(255, 255, 255, 0.12); color: var(--text); }
+    .status.doing{ background: rgba(110, 231, 255, 0.16); color: var(--accent); }
+    .status.done{ background: rgba(107, 255, 184, 0.18); color: var(--success); }
+
+    .students{
+      display: grid;
+      gap: 10px;
+    }
+
+    .student{
+      display: grid;
+      grid-template-columns: 1fr 120px 90px;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(10, 16, 34, 0.7);
+      font-size: 14px;
+    }
+
+    .student strong{ font-weight: 600; }
+
+    .student .pill{
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-align: center;
+      background: rgba(255,255,255,0.1);
+      color: var(--muted);
+    }
+
+    .student .health{
+      text-align: right;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .health.good{ color: var(--success); }
+    .health.warn{ color: var(--warning); }
+    .health.risk{ color: var(--danger); }
+
+    .assignments{
+      display: grid;
+      gap: 12px;
+    }
+
+    .assignment{
+      display: grid;
+      gap: 6px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(12, 19, 38, 0.7);
+    }
+
+    .assignment footer{
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .activity{
+      display: grid;
+      gap: 10px;
+    }
+
+    .activity-item{
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(9, 16, 34, 0.7);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .cta{
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      background: linear-gradient(135deg, rgba(110, 231, 255, 0.18), rgba(159, 139, 255, 0.18));
+      border-radius: 20px;
+      padding: 20px 24px;
+      border: 1px solid var(--line);
+    }
+
+    .btn{
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 10px 20px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .btn-primary{
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #08111f;
+    }
+
+    .btn-secondary{
+      background: transparent;
+      color: var(--text);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    @media (max-width: 900px){
+      .app{ grid-template-columns: 1fr; }
+      aside{ position: sticky; top: 0; z-index: 3; }
+    }
+
+    @media (max-width: 720px){
+      .topbar{ flex-direction: column; align-items: flex-start; gap: 12px; }
+      .student{ grid-template-columns: 1fr; }
+      .student .health{ text-align: left; }
     }
   </style>
 </head>
 <body>
-  <div class="bg" aria-hidden="true"></div>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="brand-mark">L</div>
+        LMS | Workspace
+      </div>
+      <div class="nav-group">
+        <div class="nav-item active">Огляд <span class="nav-pill">Live</span></div>
+        <div class="nav-item">Курси <span class="nav-pill">6</span></div>
+        <div class="nav-item">Групи <span class="nav-pill">4</span></div>
+        <div class="nav-item">Оцінювання</div>
+        <div class="nav-item">Контент</div>
+        <div class="nav-item">Аналітика</div>
+      </div>
+      <div class="mentor-card">
+        <h4>Наступна подія</h4>
+        <p>Mentor sync · 15:30 · 14 березня</p>
+      </div>
+      <div class="mentor-card">
+        <h4>Рекомендація</h4>
+        <p>Додайте чек-лист до модуля “Discovery”.</p>
+      </div>
+    </aside>
 
-  <div class="stage">
-    <div class="hero" id="hero">
-      <img src="assets/portrait.png" alt="Portrait">
-      <!-- next step: <img class="helmet" src="assets/helmet.png" alt="Helmet"> -->
-    </div>
+    <main>
+      <div class="topbar">
+        <div>
+          <h1>Огляд прогресу навчання</h1>
+          <div class="muted">Повний контроль над курсами, групами і даними в одному місці.</div>
+        </div>
+        <label class="search" aria-label="Пошук по LMS">
+          🔎
+          <input id="searchInput" type="text" placeholder="Пошук курсів, модулів або студентів" />
+        </label>
+      </div>
+
+      <div class="content">
+        <section class="panel">
+          <h3>Ключові метрики</h3>
+          <div class="kpi" id="kpiGrid"></div>
+        </section>
+
+        <section class="grid">
+          <div class="panel">
+            <h3>Курси в роботі</h3>
+            <div class="courses" id="courseList"></div>
+          </div>
+          <div class="panel">
+            <h3>Модулі на тиждень</h3>
+            <div class="modules" id="moduleList"></div>
+          </div>
+        </section>
+
+        <section class="grid">
+          <div class="panel">
+            <h3>Студенти і здоров'я групи</h3>
+            <div class="students" id="studentList"></div>
+          </div>
+          <div class="panel">
+            <h3>Активні завдання</h3>
+            <div class="assignments" id="assignmentList"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Жива активність</h3>
+          <div class="activity" id="activityList"></div>
+        </section>
+
+        <section class="cta">
+          <div>
+            <strong>Готові запустити LMS з даними, ролями та інтеграціями?</strong>
+            <div class="muted">Задайте структуру треків, імпортуйте базу і стартуйте пілот за 7 днів.</div>
+          </div>
+          <div>
+            <button class="btn btn-primary">Створити простір</button>
+            <button class="btn btn-secondary">Запросити команду</button>
+          </div>
+        </section>
+      </div>
+    </main>
   </div>
+
+  <script>
+    const data = {
+      kpis: [
+        { value: "84%", label: "Завершення треків" },
+        { value: "4.7", label: "Середній фідбек" },
+        { value: "12", label: "Активних курсів" },
+        { value: "+28%", label: "Прогрес груп" }
+      ],
+      courses: [
+        { name: "Product Onboarding", cohort: "Група: Alpha", progress: 78, tag: "Onboarding" },
+        { name: "AI for Managers", cohort: "Група: Beta", progress: 62, tag: "Upskill" },
+        { name: "Leadership Sprint", cohort: "Група: Gamma", progress: 44, tag: "Leadership" }
+      ],
+      modules: [
+        { title: "Discovery & контекст", details: "Відео + чек-лист + тест", status: "doing" },
+        { title: "Практика: кейс клієнта", details: "Колаборація та peer review", status: "todo" },
+        { title: "Синк з ментором", details: "15 хв формат", status: "done" }
+      ],
+      students: [
+        { name: "Марія К.", role: "UX-дизайнер", progress: "76%", health: "good" },
+        { name: "Ілля П.", role: "PM", progress: "58%", health: "warn" },
+        { name: "Дарина С.", role: "Аналітик", progress: "81%", health: "good" },
+        { name: "Олег Р.", role: "Marketing", progress: "41%", health: "risk" }
+      ],
+      assignments: [
+        { title: "Кейс: запуск продукту", owner: "Група Alpha", due: "Через 3 дні", status: "В роботі" },
+        { title: "Тест: стратегія growth", owner: "Група Beta", due: "Завтра", status: "Перевірка" },
+        { title: "Рефлексія: лідерський стиль", owner: "Група Gamma", due: "Через 5 днів", status: "Чернетка" }
+      ],
+      activity: [
+        "Марія завершила модуль “Discovery” і отримала 92%.",
+        "Олег надіслав чернетку фінального проєкту.",
+        "Ментор Олена залишила фідбек у групі Alpha.",
+        "Система нагадала про дедлайн курсу “AI for Managers”."
+      ]
+    };
+
+    const kpiGrid = document.getElementById("kpiGrid");
+    const courseList = document.getElementById("courseList");
+    const moduleList = document.getElementById("moduleList");
+    const studentList = document.getElementById("studentList");
+    const assignmentList = document.getElementById("assignmentList");
+    const activityList = document.getElementById("activityList");
+    const searchInput = document.getElementById("searchInput");
+
+    const render = () => {
+      kpiGrid.innerHTML = data.kpis
+        .map(item => `
+          <div class="kpi-card">
+            <h4>${item.value}</h4>
+            <span>${item.label}</span>
+          </div>
+        `).join("");
+
+      const query = searchInput.value.trim().toLowerCase();
+
+      courseList.innerHTML = data.courses
+        .filter(course => course.name.toLowerCase().includes(query))
+        .map(course => `
+          <div class="course-card">
+            <div class="tag">${course.tag}</div>
+            <h4>${course.name}</h4>
+            <div class="muted">${course.cohort}</div>
+            <div class="progress"><span style="width:${course.progress}%"></span></div>
+            <small class="muted">Прогрес: ${course.progress}%</small>
+          </div>
+        `).join("");
+
+      moduleList.innerHTML = data.modules
+        .filter(module => module.title.toLowerCase().includes(query))
+        .map(module => `
+          <div class="module">
+            <div>
+              <strong>${module.title}</strong>
+              <small>${module.details}</small>
+            </div>
+            <div class="status ${module.status}">${module.status}</div>
+          </div>
+        `).join("");
+
+      studentList.innerHTML = data.students
+        .filter(student => student.name.toLowerCase().includes(query) || student.role.toLowerCase().includes(query))
+        .map(student => `
+          <div class="student">
+            <div>
+              <strong>${student.name}</strong>
+              <div class="muted">${student.role}</div>
+            </div>
+            <div class="pill">${student.progress}</div>
+            <div class="health ${student.health}">
+              ${student.health === "good" ? "OK" : student.health === "warn" ? "Увага" : "Ризик"}
+            </div>
+          </div>
+        `).join("");
+
+      assignmentList.innerHTML = data.assignments
+        .filter(item => item.title.toLowerCase().includes(query))
+        .map(item => `
+          <div class="assignment">
+            <strong>${item.title}</strong>
+            <div class="muted">${item.owner}</div>
+            <footer>
+              <span>${item.due}</span>
+              <span>${item.status}</span>
+            </footer>
+          </div>
+        `).join("");
+
+      activityList.innerHTML = data.activity
+        .filter(item => item.toLowerCase().includes(query) || query === "")
+        .map(item => `<div class="activity-item">${item}</div>`)
+        .join("");
+    };
+
+    searchInput.addEventListener("input", render);
+    render();
+  </script>
 </body>
 </html>
