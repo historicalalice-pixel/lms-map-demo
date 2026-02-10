@@ -1,33 +1,40 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LMS — Початок</title>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
 
-    * { margin:0; padding:0; box-sizing:border-box; }
-    html, body { height:100%; }
+    :root{
+      --bg0:#000;
+      --txt:#f3eed7;
+    }
+
+    *{ margin:0; padding:0; box-sizing:border-box; }
+    html,body{ height:100%; }
     body{
-      background:#000;
-      color:#f3eed7;
-      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg0);
+      color: var(--txt);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       overflow:hidden;
     }
 
-    /* 3D сцена */
+    /* Сцена */
     #scene{
       position:fixed;
       inset:0;
-      perspective:1800px;
-      background: radial-gradient(circle at 50% 40%, #0f0f0f 0%, #000 75%);
+      perspective: 1700px;
+      background:
+        radial-gradient(1100px 700px at 50% 42%, rgba(255,245,210,.06), transparent 60%),
+        radial-gradient(circle at 50% 40%, #0f0f0f 0%, #000 75%);
       overflow:hidden;
     }
 
-    /* центр + preserve-3d */
-    #cloud{
+    /* Контейнер в центрі */
+    #cloudWrap{
       position:absolute;
       left:50%;
       top:50%;
@@ -35,6 +42,7 @@
       will-change:transform;
     }
 
+    /* Дати */
     .year{
       position:absolute;
       left:0; top:0;
@@ -43,17 +51,20 @@
 
       font-family:'Cormorant Garamond', serif;
       font-weight:400;
-      font-size:clamp(1.1rem, 2.8vw, 2.8rem);
+      font-size: clamp(1.0rem, 2.2vw, 2.4rem);
 
-      color: rgba(243, 238, 215, 0.55);
-      text-shadow: 0 0 16px rgba(243,238,215,0.25);
+      color: rgba(243,238,215,.52);
+      text-shadow: 0 10px 32px rgba(0,0,0,.65);
+
       pointer-events:none;
       user-select:none;
 
-      /* число центрується в своїй точці */
+      /* центруємо символ у точці */
       transform: translate3d(0,0,0) translate(-50%,-50%);
+      opacity: .55;
     }
 
+    /* Центровий блок */
     .intro{
       position:relative;
       z-index:10;
@@ -64,41 +75,55 @@
       justify-content:center;
       text-align:center;
       padding:4vw;
-      transition: opacity 1.2s ease;
+      transition: opacity 0.9s ease;
       will-change:opacity;
+    }
+
+    /* легка “підкладка”, щоб текст читався */
+    .intro::before{
+      content:"";
+      position:absolute;
+      width:min(980px, 92vw);
+      height:min(520px, 60vh);
+      border-radius: 999px;
+      background: radial-gradient(closest-side, rgba(0,0,0,.55), rgba(0,0,0,0));
+      filter: blur(0px);
+      z-index:-1;
     }
 
     /* ✅ менший заголовок */
     h1{
       font-family:'Cormorant Garamond', serif;
-      font-size: clamp(2.4rem, 6vw, 5.4rem);
+      font-size: clamp(2.2rem, 5.2vw, 5.0rem);
       font-weight:500;
       line-height:0.92;
-      margin-bottom:1.1rem;
       letter-spacing:-0.01em;
+      margin-bottom: 0.85rem;
+      color: rgba(243,238,215,.96);
+      text-shadow: 0 20px 60px rgba(0,0,0,.55);
     }
 
     .subtitle{
-      font-size:clamp(1.05rem, 2.2vw, 1.45rem);
-      max-width:720px;
-      opacity:0.88;
-      line-height:1.55;
-      margin-bottom:3rem;
+      font-size: clamp(1.0rem, 2.0vw, 1.35rem);
+      opacity: 0.88;
+      line-height: 1.55;
+      margin-bottom: 2.6rem;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
     button{
-      padding:1rem 3.5rem;
-      font-size:1rem;
-      letter-spacing:0.3em;
-      text-transform:uppercase;
-      background:transparent;
-      border:1.5px solid rgba(243,238,215,0.55);
-      color:#f3eed7;
-      cursor:pointer;
+      padding: 1rem 3.2rem;
+      font-size: 1rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      background: transparent;
+      border: 1.5px solid rgba(243,238,215,0.55);
+      color: rgba(243,238,215,.95);
+      cursor: pointer;
       transition: all .35s ease;
     }
     button:hover{
-      border-color:#f3eed7;
+      border-color: rgba(243,238,215,.95);
       background: rgba(243,238,215,0.08);
       transform: translateY(-3px);
     }
@@ -110,18 +135,18 @@
       inset:0;
       background:#000;
       opacity:0;
-      transition: opacity 1.3s ease;
-      z-index:20;
+      transition: opacity 1.1s ease;
+      z-index:30;
       pointer-events:none;
     }
 
     body.flying .intro{ opacity:0; }
   </style>
 </head>
-<body>
 
+<body>
   <div id="scene">
-    <div id="cloud"></div>
+    <div id="cloudWrap"></div>
   </div>
 
   <div class="intro">
@@ -133,133 +158,172 @@
   <div id="fade"></div>
 
   <script>
-    const cloud = document.getElementById('cloud');
+    const cloudWrap = document.getElementById('cloudWrap');
     const btn = document.getElementById('startBtn');
     const fade = document.getElementById('fade');
 
     const rand  = (a,b)=> a + Math.random()*(b-a);
     const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
     const easeInOutCubic = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+    const easeOutCubic = t => 1 - Math.pow(1-t, 3);
 
-    // ✅ реакція на мишку
+    // мишка -> паралакс/поворот
     let mx = 0, my = 0;
     window.addEventListener('mousemove', (e)=>{
       mx = (e.clientX / window.innerWidth - 0.5);
       my = (e.clientY / window.innerHeight - 0.5);
     });
 
+    // === Створення "кільця" років навколо центру (з діркою під текст) ===
     const years = [];
     const now = new Date().getFullYear();
     const minY = 1700;
     const maxY = now + 40;
 
-    // генерація років навколо центру
-    const COUNT = 90;
-    for (let i=0; i<COUNT; i++){
+    const COUNT = 96;
+
+    // радіуси: внутрішній (дірка) і зовнішній
+    const R_IN  = 320;   // щоб навколо тексту було чисто
+    const R_OUT = 980;
+
+    for (let i=0;i<COUNT;i++){
       const el = document.createElement('div');
       el.className = 'year';
       el.textContent = Math.floor(rand(minY, maxY+1));
-      cloud.appendChild(el);
+      cloudWrap.appendChild(el);
 
-      const a  = rand(0, Math.PI*2);
-      const r  = rand(120, 720);
-      const x0 = Math.cos(a)*r + rand(-180,180);
-      const y0 = Math.sin(a)*r*0.65 + rand(-140,140);
-      const z0 = rand(-900, 240);
+      // розподіл по кільцю + трохи випадковості
+      const a0 = rand(0, Math.PI*2);
+      const r0 = rand(R_IN, R_OUT);
 
-      const p = {
+      // еліпс по Y, щоб було “ширше” по горизонталі, як у референсі
+      const x0 = Math.cos(a0) * r0 + rand(-80, 80);
+      const y0 = Math.sin(a0) * r0 * 0.52 + rand(-60, 60);
+
+      // глибина: багато “позаду”, трохи “попереду”
+      const z0 = rand(-1200, 220);
+
+      const o = rand(0.28, 0.62);
+
+      // замість vx/vy -> орбіта (щоб не з’їжджало “в сторону”)
+      const orbitSpeed = rand(-0.0012, 0.0012);
+      const drift = rand(0.6, 1.6);
+
+      years.push({
         el,
-        x0, y0, z0,
-        x: x0, y: y0, z: z0,
+        a0,
+        r0,
+        x0,
+        y0,
+        z0,
+        o,
+        orbitSpeed,
+        drift,
+        wob: rand(0, Math.PI*2)
+      });
 
-        // ✅ сильніший рух
-        vx: rand(-0.22, 0.22),
-        vy: rand(-0.18, 0.18),
-        vz: rand(-0.10, 0.10),
-
-        o: rand(0.38, 0.78)
-      };
-      years.push(p);
-
-      el.style.opacity = p.o.toFixed(3);
+      el.style.opacity = o.toFixed(3);
       el.style.filter = 'none';
-      el.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px) translate(-50%,-50%)`;
+      el.style.transform = `translate3d(${x0}px, ${y0}px, ${z0}px) translate(-50%,-50%)`;
     }
 
+    // === Анімація ===
     let flying = false;
     let startTime = 0;
 
     // політ
-    const FLIGHT_MS = 1400;
-    const Z_BOOST = 2600;
-    const PULL = 0.16;
+    const FLIGHT_MS = 1500;
+    const CAMERA_DIVE = 880;   // занурення камери (в cloudWrap)
+    const Z_PUSH = 3100;       // як сильно “в камеру” летять дати
+    const PULL = 0.22;         // стягує до центру, але м’яко
 
-    function animate(ts){
-      if (!flying){
-        // ✅ паралакс/камера в idle
-        const camX = mx * 60;
-        const camY = my * 40;
-        const rotX = (-my * 6);
-        const rotY = ( mx * 8);
-        cloud.style.transform =
-          `translate3d(${camX}px, ${camY}px, 0) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+    function renderIdle(ts){
+      // камера від мишки
+      const camX = mx * 70;
+      const camY = my * 44;
+      const rotX = (-my * 7);
+      const rotY = ( mx * 10);
 
-        // ✅ помітніший дрейф
-        for (const p of years){
-          p.x += p.vx * 1.25;
-          p.y += p.vy * 1.25;
-          p.z += p.vz * 1.10;
+      cloudWrap.style.transform =
+        `translate3d(${camX}px, ${camY}px, 0) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
 
-          // легке повернення до стартових точок (щоб не "попливли" назавжди)
-          p.x -= (p.x - p.x0) * 0.002;
-          p.y -= (p.y - p.y0) * 0.002;
-          p.z -= (p.z - p.z0) * 0.002;
+      // орбітальний рух + легкий “breath” по радіусу/глибині
+      for (const p of years){
+        p.wob += 0.006 * p.drift;
+        p.a0  += p.orbitSpeed;
 
-          p.el.style.opacity = p.o.toFixed(3);
-          p.el.style.filter = 'none';
-          p.el.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px) translate(-50%,-50%)`;
-        }
+        const breath = Math.sin(p.wob) * 14;
+        const r = p.r0 + breath;
 
-        requestAnimationFrame(animate);
-        return;
+        const x = Math.cos(p.a0) * r + (p.x0 * 0.08);
+        const y = Math.sin(p.a0) * r * 0.52 + (p.y0 * 0.08);
+
+        // дуже легкий depth drift (без “в сторону”)
+        const z = p.z0 + Math.cos(p.wob*0.7) * 10;
+
+        p.el.style.opacity = p.o.toFixed(3);
+        p.el.style.filter = 'none';
+
+        // depth-scale (щоб глибина відчувалась навіть в idle)
+        const depth01 = clamp((z + 1200) / 1400, 0, 1); // 0..1
+        const scale = 0.82 + depth01 * 0.55;
+
+        p.el.style.transform =
+          `translate3d(${x}px, ${y}px, ${z}px) scale(${scale}) translate(-50%,-50%)`;
       }
+    }
 
+    function renderFlight(ts){
       const t = clamp((ts - startTime) / FLIGHT_MS, 0, 1);
       const e = easeInOutCubic(t);
+      const eo = easeOutCubic(t);
 
-      // ✅ паралакс/камера у польоті теж
-      const camX = mx * 30;
-      const camY = my * 22;
-      const rotX = (-my * 6) + (-6 * e);
-      const rotY = ( mx * 8) + ( 8 * e);
-      cloud.style.transform =
-        `translate3d(${camX}px, ${camY}px, ${-(e*520)}px) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+      // камера занурюється + реагує на мишку
+      const camX = mx * 36;
+      const camY = my * 26;
+      const rotX = (-my * 7) + (-7 * e);
+      const rotY = ( mx * 10) + (10 * e);
+
+      cloudWrap.style.transform =
+        `translate3d(${camX}px, ${camY}px, ${-(e*CAMERA_DIVE)}px) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
 
       for (const p of years){
+        // трошки стягуємо до центру (0,0), але залишаємо “навколо”
         const x = p.x0 * (1 - e*PULL);
         const y = p.y0 * (1 - e*PULL);
-        const z = p.z0 + (Z_BOOST * e);
 
-        const blur = e * 1.2;
-        const op = Math.max(0, p.o - e*0.55);
+        // головний “проліт” в камеру
+        const z = p.z0 + (Z_PUSH * eo);
+
+        // depth-scale агресивніше у польоті
+        const depth01 = clamp((z + 1200) / 1600, 0, 1);
+        const scale = 0.85 + depth01 * (1.85 * e + 0.55);
+
+        const blur = e * 1.6;
+        const op = Math.max(0, p.o - e*0.62);
 
         p.el.style.opacity = op.toFixed(3);
         p.el.style.filter = `blur(${blur.toFixed(2)}px)`;
-        p.el.style.transform = `translate3d(${x}px, ${y}px, ${z}px) translate(-50%,-50%)`;
+        p.el.style.transform =
+          `translate3d(${x}px, ${y}px, ${z}px) scale(${scale}) translate(-50%,-50%)`;
       }
 
-      // fade пізніше, щоб проліт було видно
-      if (t > 0.62) fade.style.opacity = String((t - 0.62) / 0.38);
+      // fade в кінці, щоб ефект занурення було видно
+      if (t > 0.72){
+        fade.style.opacity = String((t - 0.72) / 0.28);
+      }
 
       if (t >= 1){
         location.href = './main.html#overview';
-        return;
       }
-
-      requestAnimationFrame(animate);
     }
 
-    requestAnimationFrame(animate);
+    function loop(ts){
+      if (!flying) renderIdle(ts);
+      else renderFlight(ts);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
 
     btn.addEventListener('click', ()=>{
       if (flying) return;
@@ -269,6 +333,5 @@
       btn.disabled = true;
     });
   </script>
-
 </body>
 </html>
