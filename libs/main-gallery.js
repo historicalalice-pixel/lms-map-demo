@@ -1,311 +1,265 @@
 // libs/main-gallery.js
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
+import * as THREE from "./three.module.js";
+import { GALLERY_ITEMS } from "./data.js";
 
 /**
- * 100lostspecies-like: you are INSIDE a cylindrical/spherical band.
- * - 2 bands visible
- * - 3rd band hidden on top, revealed by dragging mouse upward
- * - slow inertia (wheel/drag)
- * - strong parallax (mouse -> camera micro-shift)
+ * Main gallery scene (Three.js, vanilla).
+ * Goal: "inside a sphere" feel: 2 visible belts + 3rd hidden on top,
+ * smooth/inertial scroll (slow), wider gaps, ~5 cards visible in the main belt.
  */
-export function initMainGallery({ mountEl }) {
-  mountEl.innerHTML = "";
+export function initMainGallery({ mountEl, overlayEl } = {}) {
+  if (!mountEl) throw new Error("initMainGallery: mountEl is required");
+
+  // ---- Hide overlay title/text (requested) ----
+  if (overlayEl) overlayEl.style.display = "none";
 
   // ---------- renderer ----------
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    powerPreference: "high-performance",
-  });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
-  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  mountEl.innerHTML = "";
   mountEl.appendChild(renderer.domElement);
 
   // ---------- scene / camera ----------
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(
-    52,
+    40, // narrower FOV => fewer cards visible
     mountEl.clientWidth / mountEl.clientHeight,
     0.1,
-    5000
+    2000
   );
+  const CAMERA_BASE = new THREE.Vector3(0, 0, 430);
+  camera.position.copy(CAMERA_BASE);
 
-  // CAMERA IS INSIDE
-  camera.position.set(0, 0, 0);
+  // Soft ambient (subtle) so cards never "disappear"
+  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
 
-  // subtle fog for depth (nice cinematic)
-  scene.fog = new THREE.FogExp2(0x05070d, 0.00075);
+  // ---------- tuning (the important part) ----------
+  // Card sizing
+  const CARD_W = 140;
+  const CARD_H = 92;
+  const CARD_THICK = 0.2;
 
-  // ---------- lighting (very soft) ----------
-  // We’ll use MeshBasic-like look but still add gentle light for nicer shading later.
-  const amb = new THREE.AmbientLight(0xffffff, 0.55);
-  scene.add(amb);
+  // Arc / spacing: larger GAP => more distance between cards
+  const GAP = 34;
 
-  const dir = new THREE.DirectionalLight(0xffffff, 0.55);
-  dir.position.set(200, 200, 120);
-  scene.add(dir);
+  // Cylinder/sphere-ish radius (bigger radius + smaller FOV => "inside sphere")
+  const R = 360;
 
-  // ---------- helpers ----------
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const lerp = (a, b, t) => a + (b - a) * t;
+  // STEP in radians derived from desired arc length (width + gap)
+  const STEP = (CARD_W + GAP) / R;
 
-  // ---------- interaction state ----------
-  const mouse = { x: 0, y: 0 };
-  let isDown = false;
-  let downX = 0;
-  let downY = 0;
+  // Number of cards around 360°. +1 for overlap (avoids micro-gaps)
+  const PER = Math.ceil((Math.PI * 2) / STEP) + 1;
 
-  // yaw = horizontal orbit, pitch = vertical orbit (small)
-  let yaw = 0;
-  let pitch = 0;
-
-  let yawVel = 0;
-  let pitchVel = 0;
-
-  // reveal for top band [0..1]
-  let topReveal = 0;
-  let topRevealVel = 0;
-
-  // “auto drift” extremely slow
-  const AUTO_DRIFT = 0.00025;
-
-  // ---------- world ----------
-  const world = new THREE.Group();
-  scene.add(world);
-
-  // ---------- bands config ----------
-  // radius is distance from camera to cards (inside cylinder)
-  const R = 520;
-
-  // cards count per band
-  const COUNT = 28;
-
-  // band spacing (vertical)
-  const BAND_Y = 115;
-
-  // card geometry size (BIG + readable)
-  const CARD_W = 180;
-  const CARD_H = 120;
-
-  // how much the band curves vertically (gives "inside sphere" feel)
-  const V_CURVE = 0.55;
-
-  // palettes (temporary)
-  const palette = [
-    0x9fd3ff, 0xb4ffd8, 0xd8b9ff, 0xffd2b0,
-    0xbbe3ff, 0xc6ffd8, 0xf0c8ff, 0xffe1b8,
-    0xa7b9ff, 0x9fffd2, 0xf2b2ff, 0xffc59f,
+  // Belts positions (Y) and their local radius offsets (small variation helps depth)
+  const BELTS = [
+    { y: 105, r: R * 0.98, phase: 0.0 }, // top (will be hidden/revealed)
+    { y: 0, r: R, phase: 0.35 },         // middle (main belt)
+    { y: -110, r: R * 1.02, phase: 0.70 } // bottom
   ];
 
-  function makeCard(i) {
-    const geo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
+  // Speed / inertia (SLOW, cinematic)
+  const AUTO_DRIFT = 0.00015;     // constant slow movement
+  const WHEEL_TO_VEL = 0.00022;   // smaller = slower wheel response
+  const DRAG_TO_VEL = 0.00065;    // pointer drag response
+  const FRICTION = 0.92;          // closer to 1 = longer glide, softer
+  const MAX_VEL = 0.035;          // cap sharp spikes
+  const PARALLAX_X = 12;          // camera parallax in 3D units
+  const PARALLAX_Y = 8;
 
-    // IMPORTANT: depthWrite false helps avoid “transparent mess”
-    const mat = new THREE.MeshStandardMaterial({
-      color: palette[i % palette.length],
-      roughness: 0.65,
-      metalness: 0.0,
-      transparent: true,
-      opacity: 0.92,
+  // ---------- belt builder ----------
+  const cardGeo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
+
+  function makeCardMaterial(hex) {
+    // IMPORTANT: keep opaque (cards were "invisible" when transparent)
+    return new THREE.MeshBasicMaterial({
+      color: new THREE.Color(hex),
+      transparent: false,
+      opacity: 1,
       side: THREE.DoubleSide,
-      depthWrite: false,
+      depthWrite: true,
     });
-
-    const m = new THREE.Mesh(geo, mat);
-
-    // tiny random tilt (like paper cards)
-    m.rotation.z = (Math.random() - 0.5) * 0.18;
-
-    // subtle border (wireframe-ish) using a second plane slightly in front
-    const borderGeo = new THREE.PlaneGeometry(CARD_W + 6, CARD_H + 6, 1, 1);
-    const borderMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.12,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const border = new THREE.Mesh(borderGeo, borderMat);
-    border.position.z = 0.6;
-    m.add(border);
-
-    return m;
   }
 
-  function createBand(index, yBase) {
+  function buildBelt(seed = 0) {
     const g = new THREE.Group();
-    g.position.y = yBase;
-    world.add(g);
 
-    const cards = [];
-    for (let i = 0; i < COUNT; i++) {
-      const mesh = makeCard(i + index * 100);
+    for (let i = 0; i < PER; i++) {
+      // If your data.js has images later — we can swap material to textures.
+      // For now: color cards (visible always).
+      const item =
+        GALLERY_ITEMS?.[(i + seed) % (GALLERY_ITEMS?.length || 1)];
+
+      const color =
+        item?.color ||
+        ["#5bb7a5", "#8b74d9", "#e2b55b", "#6fa2d9", "#d88b7b"][(i + seed) % 5];
+
+      const mesh = new THREE.Mesh(cardGeo, makeCardMaterial(color));
+      mesh.renderOrder = 1;
+
+      // tiny thickness illusion: an extra back plane slightly behind
+      const back = new THREE.Mesh(
+        new THREE.PlaneGeometry(CARD_W, CARD_H),
+        new THREE.MeshBasicMaterial({
+          color: 0x0b1020,
+          transparent: true,
+          opacity: 0.15,
+          side: THREE.DoubleSide,
+        })
+      );
+      back.position.z = -CARD_THICK;
+      mesh.add(back);
+
       g.add(mesh);
-
-      cards.push({
-        mesh,
-        a0: (i / COUNT) * Math.PI * 2,
-        phase: Math.random() * 1000,
-      });
     }
 
-    return { group: g, cards, yBase };
+    scene.add(g);
+    return g;
   }
 
-  // 2 visible + top hidden
-  const bandMid = createBand(0, 0);
-  const bandLow = createBand(1, -BAND_Y);
-  const bandTop = createBand(2, +BAND_Y * 1.35); // start higher; we’ll animate it down
+  const beltGroups = BELTS.map((b, idx) => ({
+    cfg: { ...b },
+    group: buildBelt(idx * 7),
+  }));
 
-  // Position cards on inner cylinder, facing center (camera at center)
-  function layoutBand(band, t, yawOffset) {
-    const y = band.group.position.y;
+  // Start with top belt hidden above, like 100lostspecies
+  const TOP_HIDDEN_Y = 240;
+  beltGroups[0].cfg._yShown = BELTS[0].y;
+  beltGroups[0].cfg._yHidden = TOP_HIDDEN_Y;
+  beltGroups[0].cfg._reveal = 0; // 0..1
+  beltGroups[0].cfg.y = TOP_HIDDEN_Y;
 
-    for (const c of band.cards) {
-      // angle around cylinder
-      const a = c.a0 + yawOffset;
+  // ---------- input state ----------
+  let mouseN = new THREE.Vector2(0, 0);
 
-      // cylinder coordinates
-      const x = Math.cos(a) * R;
-      const z = Math.sin(a) * R;
+  let scrollPos = 0; // "phase" space (radians)
+  let scrollVel = 0;
 
-      // vertical curvature (makes "inside sphere" illusion)
-      // cards a bit higher/lower depending on where they are around you
-      const vCurve = Math.cos(a) * V_CURVE; // [-V_CURVE..+V_CURVE]
-      const yCurve = vCurve * (Math.abs(y) * 0.35 + 42);
+  let isDown = false;
+  let lastX = 0;
+  let lastY = 0;
 
-      // micro-floating
-      const wob = Math.sin(t * 0.8 + c.phase) * 2.5;
-
-      c.mesh.position.set(x, y + yCurve + wob, z);
-
-      // face the center (camera)
-      c.mesh.lookAt(0, c.mesh.position.y * 0.02, 0);
-
-      // scale/opacity depending on how "front" it is
-      // when z is near 0 and x near -R? Actually front depends on camera view direction.
-      // We'll treat "front" as nearest to camera direction (which is where a ≈ +PI/2 gives z≈+R).
-      const front = (z / R + 1) * 0.5; // 0..1
-      const s = lerp(0.78, 1.22, front);
-      c.mesh.scale.set(s, s, 1);
-
-      c.mesh.material.opacity = lerp(0.18, 0.92, front);
-    }
+  function clamp(v, a, b) {
+    return Math.max(a, Math.min(b, v));
   }
 
-  // ---------- input ----------
   function onMouseMove(e) {
-    const r = renderer.domElement.getBoundingClientRect();
-    const nx = (e.clientX - r.left) / r.width;
-    const ny = (e.clientY - r.top) / r.height;
-    mouse.x = (nx - 0.5) * 2; // [-1..1]
-    mouse.y = (ny - 0.5) * 2; // [-1..1]
-
-    if (!isDown) return;
-
-    const dx = (e.clientX - downX);
-    const dy = (e.clientY - downY);
-
-    downX = e.clientX;
-    downY = e.clientY;
-
-    // drag adds velocity (slow, “heavy”)
-    yawVel += dx * 0.00006;
-    pitchVel += dy * 0.00005;
-
-    // dragging UP reveals top band
-    // dy < 0 => reveal increase
-    topRevealVel += (-dy) * 0.00022;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    mouseN.set((x - 0.5) * 2, (0.5 - y) * 2);
   }
+  window.addEventListener("mousemove", onMouseMove, { passive: true });
 
-  function onDown(e) {
-    isDown = true;
-    downX = e.clientX;
-    downY = e.clientY;
-  }
-
-  function onUp() {
-    isDown = false;
-  }
-
-  renderer.domElement.addEventListener("pointerdown", onDown);
-  window.addEventListener("pointerup", onUp);
-  window.addEventListener("pointermove", onMouseMove);
-
-  // wheel => yaw velocity (VERY slow)
-  renderer.domElement.addEventListener(
+  // Wheel — slow inertial add
+  window.addEventListener(
     "wheel",
     (e) => {
-      e.preventDefault();
+      e.preventDefault?.();
+
+      // Normalize delta
       const d = clamp(e.deltaY, -120, 120);
-      yawVel += d * 0.00006; // slower
+      scrollVel += d * WHEEL_TO_VEL;
+      scrollVel = clamp(scrollVel, -MAX_VEL, MAX_VEL);
     },
     { passive: false }
   );
 
-  // ---------- animate ----------
-  let last = performance.now();
+  // Pointer drag — also slow, plus reveal top belt on drag-up
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      isDown = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    },
+    { passive: true }
+  );
 
-  function tick(now) {
-    const dt = Math.min((now - last) / 1000, 0.033);
-    last = now;
-    const t = now / 1000;
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!isDown) return;
 
-    // tiny auto drift
-    yawVel += AUTO_DRIFT;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
 
-    // inertia (heavy)
-    const damp = Math.pow(0.86, dt * 60);
-    yawVel *= damp;
-    pitchVel *= Math.pow(0.84, dt * 60);
-    topRevealVel *= Math.pow(0.80, dt * 60);
+      // Horizontal drag -> scroll (soft)
+      scrollVel += -dx * DRAG_TO_VEL * 0.001;
+      scrollVel = clamp(scrollVel, -MAX_VEL, MAX_VEL);
 
-    yaw += yawVel;
-    pitch += pitchVel;
+      // Drag up reveals top belt (0..1)
+      const top = beltGroups[0].cfg;
+      top._reveal = clamp(top._reveal + -dy * 0.002, 0, 1);
+    },
+    { passive: true }
+  );
 
-    // clamp pitch (don’t flip)
-    pitch = clamp(pitch, -0.24, 0.24);
+  window.addEventListener(
+    "pointerup",
+    () => {
+      isDown = false;
+    },
+    { passive: true }
+  );
 
-    // reveal top band
-    topReveal += topRevealVel;
-    topReveal *= Math.pow(0.92, dt * 60);
-    topReveal = clamp(topReveal, 0, 1);
+  // ---------- layout update ----------
+  function updateBelt(group, cfg, phase) {
+    // phase is in radians: makes it feel infinite (rotating cylinder)
+    for (let i = 0; i < group.children.length; i++) {
+      const m = group.children[i];
 
-    // camera parallax (VERY IMPORTANT)
-    // This is the “alive” effect: camera subtly shifts, but world stays coherent.
-    const parX = mouse.x * 18;
-    const parY = -mouse.y * 10;
+      const a = i * STEP + phase + cfg.phase;
+      const x = Math.sin(a) * cfg.r;
+      const z = Math.cos(a) * cfg.r;
 
-    camera.position.x = lerp(camera.position.x, parX, 1 - Math.pow(0.88, dt * 60));
-    camera.position.y = lerp(camera.position.y, parY, 1 - Math.pow(0.88, dt * 60));
+      m.position.set(x, cfg.y, z);
 
-    // camera looks slightly forward with pitch
-    const lookX = Math.sin(yaw) * 2;
-    const lookY = pitch * 120;
-    const lookZ = Math.cos(yaw) * 2;
+      // face inward toward camera origin (inside-sphere vibe)
+      m.lookAt(0, cfg.y, 0);
 
-    camera.lookAt(lookX, lookY, lookZ);
+      // subtle depth cue: cards fade a bit when behind (never invisible)
+      const behind = z < 0 ? 1 : 0;
+      const alpha = behind ? 0.55 : 0.95;
 
-    // world “orbit” is mostly yaw, small pitch
-    world.rotation.y = yaw;
-    world.rotation.x = pitch;
-
-    // animate top band position + opacity
-    // hidden: up and faint; revealed: comes down + strong
-    const topYHidden = BAND_Y * 1.85;
-    const topYShown = BAND_Y * 0.95;
-    bandTop.group.position.y = lerp(topYHidden, topYShown, topReveal);
-
-    for (const c of bandTop.cards) {
-      c.mesh.material.opacity = lerp(0.02, 0.88, topReveal);
+      if (m.material && m.material.opacity !== alpha) {
+        m.material.transparent = true;
+        m.material.opacity = alpha;
+      }
     }
+  }
 
-    // layout (yawOffset small differences for 3 bands)
-    layoutBand(bandMid, t, 0.00);
-    layoutBand(bandLow, t, 0.22);
-    layoutBand(bandTop, t, 0.44);
+  // ---------- main loop ----------
+  function tick() {
+    // Auto drift
+    scrollVel += AUTO_DRIFT;
+
+    // Inertia / friction
+    scrollVel *= FRICTION;
+    scrollVel = clamp(scrollVel, -MAX_VEL, MAX_VEL);
+    scrollPos += scrollVel;
+
+    // Top belt returns softly when not dragging
+    const top = beltGroups[0].cfg;
+    if (!isDown) top._reveal *= 0.94;
+    top.y = THREE.MathUtils.lerp(top._yHidden, top._yShown, top._reveal);
+
+    // Camera parallax (very important)
+    const tx = CAMERA_BASE.x + mouseN.x * PARALLAX_X;
+    const ty = CAMERA_BASE.y + mouseN.y * PARALLAX_Y;
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, tx, 0.08);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, ty, 0.08);
+    camera.lookAt(0, 0, 0);
+
+    // Update belts: different speed factors mimic layered motion
+    updateBelt(beltGroups[1].group, beltGroups[1].cfg, scrollPos * 1.0);  // main
+    updateBelt(beltGroups[2].group, beltGroups[2].cfg, scrollPos * 0.92); // slightly slower
+    updateBelt(beltGroups[0].group, beltGroups[0].cfg, scrollPos * 1.08); // slightly faster
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
@@ -325,9 +279,7 @@ export function initMainGallery({ mountEl }) {
   return {
     destroy() {
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointermove", onMouseMove);
-      renderer.domElement.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("mousemove", onMouseMove);
       renderer.dispose();
       mountEl.innerHTML = "";
     },
