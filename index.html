@@ -9,97 +9,119 @@
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
 
     * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      height: 100vh;
-      background: #000;
-      color: #f3eed7;
-      font-family: 'Inter', sans-serif;
-      overflow: hidden;
+    html, body { height:100%; }
+    body{
+      background:#000;
+      color:#f3eed7;
+      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      overflow:hidden;
     }
 
-    #scene {
-      position: fixed;
-      inset: 0;
-      perspective: 1800px;
+    /* 3D сцена */
+    #scene{
+      position:fixed;
+      inset:0;
+      perspective:1800px;
       background: radial-gradient(circle at 50% 40%, #0f0f0f 0%, #000 75%);
+      overflow:hidden;
     }
 
-    .year {
-      position: absolute;
-      font-family: 'Cormorant Garamond', serif;
-      font-weight: 400;
-      font-size: clamp(1.1rem, 2.8vw, 2.8rem);
-      color: rgba(243, 238, 215, 0.38);
-      text-shadow: 0 0 12px rgba(243,238,215,0.25);
-      pointer-events: none;
-      will-change: transform, opacity, filter;
-      transform-style: preserve-3d;
+    /* дуже важливо: центр + preserve-3d */
+    #cloud{
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform-style:preserve-3d;
+      will-change:transform;
     }
 
-    .intro {
-      position: relative;
-      z-index: 10;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 4vw;
-      transition: opacity 1.6s ease;
+    .year{
+      position:absolute;
+      left:0; top:0;
+      transform-style:preserve-3d;
+      will-change:transform, opacity, filter;
+
+      font-family:'Cormorant Garamond', serif;
+      font-weight:400;
+      font-size:clamp(1.1rem, 2.8vw, 2.8rem);
+
+      color: rgba(243,238,215,0.55);
+      text-shadow: 0 0 16px rgba(243,238,215,0.25);
+      pointer-events:none;
+      user-select:none;
+
+      /* щоб число було по центру своєї точки */
+      transform: translate3d(0,0,0) translate(-50%,-50%);
     }
 
-    h1 {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(3.2rem, 8vw, 7.2rem);
-      font-weight: 500;
-      line-height: 0.92;
-      margin-bottom: 1.2rem;
-      letter-spacing: -0.01em;
+    .intro{
+      position:relative;
+      z-index:10;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:4vw;
+      transition: opacity 1.2s ease;
+      will-change:opacity;
     }
 
-    .subtitle {
-      font-size: clamp(1.1rem, 2.4vw, 1.5rem);
-      max-width: 720px;
-      opacity: 0.88;
-      line-height: 1.55;
-      margin-bottom: 3rem;
+    h1{
+      font-family:'Cormorant Garamond', serif;
+      font-size:clamp(3.2rem, 8vw, 7.2rem);
+      font-weight:500;
+      line-height:0.92;
+      margin-bottom:1.2rem;
+      letter-spacing:-0.01em;
     }
 
-    button {
-      padding: 1rem 3.5rem;
-      font-size: 1rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      background: transparent;
-      border: 1.5px solid rgba(243,238,215,0.55);
-      color: #f3eed7;
-      cursor: pointer;
-      transition: all 0.4s ease;
+    .subtitle{
+      font-size:clamp(1.1rem, 2.4vw, 1.5rem);
+      max-width:720px;
+      opacity:0.88;
+      line-height:1.55;
+      margin-bottom:3rem;
     }
 
-    button:hover {
-      border-color: #f3eed7;
+    button{
+      padding:1rem 3.5rem;
+      font-size:1rem;
+      letter-spacing:0.3em;
+      text-transform:uppercase;
+      background:transparent;
+      border:1.5px solid rgba(243,238,215,0.55);
+      color:#f3eed7;
+      cursor:pointer;
+      transition: all .35s ease;
+    }
+    button:hover{
+      border-color:#f3eed7;
       background: rgba(243,238,215,0.08);
       transform: translateY(-3px);
     }
+    button:active{ transform: translateY(-1px); }
+    button[disabled]{ opacity:.55; cursor:default; }
 
-    #fade {
-      position: fixed;
-      inset: 0;
-      background: #000;
-      opacity: 0;
-      transition: opacity 1.8s ease-in;
-      z-index: 20;
-      pointer-events: none;
+    #fade{
+      position:fixed;
+      inset:0;
+      background:#000;
+      opacity:0;
+      transition: opacity 1.3s ease;
+      z-index:20;
+      pointer-events:none;
     }
 
-    body.flying .intro { opacity: 0; }
+    body.flying .intro{ opacity:0; }
   </style>
 </head>
 <body>
 
-  <div id="scene"></div>
+  <div id="scene">
+    <div id="cloud"></div>
+  </div>
 
   <div class="intro">
     <h1>Навчання — це подорож</h1>
@@ -110,74 +132,106 @@
   <div id="fade"></div>
 
   <script>
-    const scene = document.getElementById('scene');
+    const cloud = document.getElementById('cloud');
     const btn = document.getElementById('startBtn');
     const fade = document.getElementById('fade');
+
+    const rand = (a,b)=> a + Math.random()*(b-a);
+    const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
+    const easeInOutCubic = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
 
     const years = [];
     const now = new Date().getFullYear();
     const minY = 1700;
     const maxY = now + 40;
 
-    // Створюємо дати навколо (не в центрі)
-    for (let i = 0; i < 90; i++) {   // менше, щоб не було каші
+    // генерація років навколо центру (реально видно)
+    const COUNT = 90;
+    for (let i=0; i<COUNT; i++){
       const el = document.createElement('div');
       el.className = 'year';
-      const year = minY + Math.floor(Math.random() * (maxY - minY + 1));
-      el.textContent = year;
-      scene.appendChild(el);
+      el.textContent = Math.floor(rand(minY, maxY+1));
+      cloud.appendChild(el);
 
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 400 + Math.random() * 900;  // від центру подалі
-      const x = Math.cos(angle) * radius;
-      const y = (Math.sin(angle) * radius * 0.6) + (Math.random() - 0.5) * 400;
-      const z = (Math.random() - 0.5) * 1400 - 300;
+      // розкладка хмарою навколо центру
+      const a = rand(0, Math.PI*2);
+      const r = rand(120, 720);
+      const x0 = Math.cos(a)*r + rand(-180,180);
+      const y0 = Math.sin(a)*r*0.65 + rand(-140,140);
+      const z0 = rand(-900, 240);
 
-      years.push({
+      const p = {
         el,
-        x, y, z,
-        vx: (Math.random() - 0.5) * 1.4,
-        vy: (Math.random() - 0.5) * 1.1,
-        vz: (Math.random() - 0.5) * 0.9,
-        baseOpacity: 0.32 + Math.random() * 0.18
-      });
+        x0, y0, z0,
+        x: x0, y: y0, z: z0,
+        vx: rand(-0.06, 0.06),
+        vy: rand(-0.05, 0.05),
+        vz: rand(-0.03, 0.03),
+        o:  rand(0.38, 0.78)
+      };
+      years.push(p);
 
-      el.style.opacity = years[i].baseOpacity;
-      el.style.transform = `translate3d(${x}px, ${y}px, ${z}px)`;
+      el.style.opacity = p.o.toFixed(3);
+      el.style.filter = 'none';
+      el.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px) translate(-50%,-50%)`;
     }
 
     let flying = false;
     let startTime = 0;
 
-    function animate(ts) {
-      if (!flying) {
-        // повільний природний дрейф
-        years.forEach(d => {
-          d.x += d.vx * 0.6;
-          d.y += d.vy * 0.6;
-          d.z += d.vz * 0.4;
-          d.el.style.transform = `translate3d(${d.x}px, ${d.y}px, ${d.z}px)`;
-        });
-      } else {
-        const t = Math.min((ts - startTime) / 1600, 1);  // 1.6 с
-        const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    // параметри польоту
+    const FLIGHT_MS = 1400;
+    const Z_BOOST = 2600;     // наскільки “летимо в камеру”
+    const PULL = 0.16;        // наскільки стягує в центр
 
-        years.forEach(d => {
-          d.x += (0 - d.x) * e * 2.2;
-          d.y += (0 - d.y) * e * 2.2;
-          d.z += 3200 * e;
+    function animate(ts){
+      if (!flying){
+        // тихий дрейф + легке повернення до стартової точки
+        for (const p of years){
+          p.x += p.vx;
+          p.y += p.vy;
+          p.z += p.vz;
 
-          const scale = 1 + e * 3.5;
-          const blur = e * 14;
+          p.x -= (p.x - p.x0) * 0.002;
+          p.y -= (p.y - p.y0) * 0.002;
+          p.z -= (p.z - p.z0) * 0.002;
 
-          d.el.style.transform = `translate3d(${d.x}px, ${d.y}px, ${d.z}px) scale(${scale})`;
-          d.el.style.opacity = Math.max(0, d.baseOpacity - e * 1.6);
-          d.el.style.filter = `blur(${blur}px)`;
-        });
-
-        if (t >= 1) {
-          location.href = './main.html#overview';
+          p.el.style.opacity = p.o.toFixed(3);
+          p.el.style.filter = 'none';
+          p.el.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px) translate(-50%,-50%)`;
         }
+        requestAnimationFrame(animate);
+        return;
+      }
+
+      const t = clamp((ts - startTime) / FLIGHT_MS, 0, 1);
+      const e = easeInOutCubic(t);
+
+      // “камера” трохи під’їжджає
+      cloud.style.transform = `translate3d(0,0,${-(e*520)}px)`;
+
+      for (const p of years){
+        // стягуємо до центру (0,0) — тепер це центр екрану, а не кут!
+        const x = p.x0 * (1 - e*PULL);
+        const y = p.y0 * (1 - e*PULL);
+
+        // головний проліт у z
+        const z = p.z0 + (Z_BOOST * e);
+
+        const blur = e * 1.2;
+        const op = Math.max(0, p.o - e*0.55);
+
+        p.el.style.opacity = op.toFixed(3);
+        p.el.style.filter = `blur(${blur.toFixed(2)}px)`;
+        p.el.style.transform = `translate3d(${x}px, ${y}px, ${z}px) translate(-50%,-50%)`;
+      }
+
+      // fade трохи пізніше, щоб проліт було видно
+      if (t > 0.62) fade.style.opacity = String((t - 0.62) / 0.38);
+
+      if (t >= 1){
+        location.href = './main.html#overview';
+        return;
       }
 
       requestAnimationFrame(animate);
@@ -185,14 +239,14 @@
 
     requestAnimationFrame(animate);
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', ()=>{
       if (flying) return;
       flying = true;
       startTime = performance.now();
       document.body.classList.add('flying');
-      fade.style.opacity = '1';
-      btn.style.pointerEvents = 'none';
+      btn.disabled = true;
     });
   </script>
+
 </body>
 </html>
