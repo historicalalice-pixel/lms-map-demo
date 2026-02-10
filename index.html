@@ -20,47 +20,68 @@
     #scene {
       position: fixed;
       inset: 0;
-      perspective: 2400px;
-      background: radial-gradient(circle at 50% 40%, #111 0%, #000 80%);
+      perspective: 1800px;
+      background: radial-gradient(circle at 50% 40%, #0f0f0f 0%, #000 75%);
     }
 
     .year {
       position: absolute;
-      left: 50%; top: 50%;
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(2rem, 6vw, 7.5rem);
-      font-weight: 500;
-      color: rgba(243, 238, 215, 0.65);
-      text-shadow: 0 0 25px rgba(243,238,215,0.5);
+      font-weight: 400;
+      font-size: clamp(1.1rem, 2.8vw, 2.8rem);
+      color: rgba(243, 238, 215, 0.38);
+      text-shadow: 0 0 12px rgba(243,238,215,0.25);
       pointer-events: none;
-      transform: translate(-50%, -50%);
       will-change: transform, opacity, filter;
+      transform-style: preserve-3d;
     }
 
     .intro {
-      position: absolute;
-      inset: 0;
+      position: relative;
+      z-index: 10;
+      height: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
-      z-index: 10;
-      transition: opacity 1.4s ease;
+      padding: 4vw;
+      transition: opacity 1.6s ease;
     }
 
-    h1 { font-size: clamp(5rem, 13vw, 15rem); margin-bottom: 1.5rem; line-height: 0.88; }
-    .subtitle { font-size: 1.6rem; max-width: 820px; opacity: 0.9; margin-bottom: 4rem; }
+    h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(3.2rem, 8vw, 7.2rem);
+      font-weight: 500;
+      line-height: 0.92;
+      margin-bottom: 1.2rem;
+      letter-spacing: -0.01em;
+    }
+
+    .subtitle {
+      font-size: clamp(1.1rem, 2.4vw, 1.5rem);
+      max-width: 720px;
+      opacity: 0.88;
+      line-height: 1.55;
+      margin-bottom: 3rem;
+    }
 
     button {
-      padding: 1.4rem 4.5rem;
-      font-size: 1.2rem;
-      letter-spacing: 0.4em;
+      padding: 1rem 3.5rem;
+      font-size: 1rem;
+      letter-spacing: 0.3em;
       text-transform: uppercase;
       background: transparent;
-      border: 2px solid #f3eed7;
+      border: 1.5px solid rgba(243,238,215,0.55);
       color: #f3eed7;
       cursor: pointer;
+      transition: all 0.4s ease;
+    }
+
+    button:hover {
+      border-color: #f3eed7;
+      background: rgba(243,238,215,0.08);
+      transform: translateY(-3px);
     }
 
     #fade {
@@ -68,8 +89,9 @@
       inset: 0;
       background: #000;
       opacity: 0;
-      transition: opacity 1.6s ease;
+      transition: opacity 1.8s ease-in;
       z-index: 20;
+      pointer-events: none;
     }
 
     body.flying .intro { opacity: 0; }
@@ -82,69 +104,79 @@
   <div class="intro">
     <h1>Навчання — це подорож</h1>
     <p class="subtitle">Крізь час і знання</p>
-    <button id="go">ПОЧАТИ</button>
+    <button id="startBtn">ПОЧАТИ</button>
   </div>
 
   <div id="fade"></div>
 
   <script>
     const scene = document.getElementById('scene');
-    const btn = document.getElementById('go');
+    const btn = document.getElementById('startBtn');
     const fade = document.getElementById('fade');
 
     const years = [];
     const now = new Date().getFullYear();
+    const minY = 1700;
+    const maxY = now + 40;
 
-    // Створюємо дати
-    for (let i = 0; i < 180; i++) {
+    // Створюємо дати навколо (не в центрі)
+    for (let i = 0; i < 90; i++) {   // менше, щоб не було каші
       const el = document.createElement('div');
       el.className = 'year';
-      el.textContent = 1650 + Math.floor(Math.random() * (now + 80 - 1650));
+      const year = minY + Math.floor(Math.random() * (maxY - minY + 1));
+      el.textContent = year;
       scene.appendChild(el);
 
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 400 + Math.random() * 900;  // від центру подалі
+      const x = Math.cos(angle) * radius;
+      const y = (Math.sin(angle) * radius * 0.6) + (Math.random() - 0.5) * 400;
+      const z = (Math.random() - 0.5) * 1400 - 300;
+
       years.push({
-        el: el,
-        x: (Math.random() - 0.5) * 2400,
-        y: (Math.random() - 0.5) * 1800,
-        z: (Math.random() - 0.5) * 2800 - 900,
-        vx: (Math.random() - 0.5) * 3,
-        vy: (Math.random() - 0.5) * 2.5,
-        vz: (Math.random() - 0.5) * 2
+        el,
+        x, y, z,
+        vx: (Math.random() - 0.5) * 1.4,
+        vy: (Math.random() - 0.5) * 1.1,
+        vz: (Math.random() - 0.5) * 0.9,
+        baseOpacity: 0.32 + Math.random() * 0.18
       });
+
+      el.style.opacity = years[i].baseOpacity;
+      el.style.transform = `translate3d(${x}px, ${y}px, ${z}px)`;
     }
 
     let flying = false;
-    let startTs = 0;
+    let startTime = 0;
 
     function animate(ts) {
       if (!flying) {
+        // повільний природний дрейф
         years.forEach(d => {
-          d.x += d.vx;
-          d.y += d.vy;
-          d.z += d.vz;
+          d.x += d.vx * 0.6;
+          d.y += d.vy * 0.6;
+          d.z += d.vz * 0.4;
           d.el.style.transform = `translate3d(${d.x}px, ${d.y}px, ${d.z}px)`;
         });
       } else {
-        const progress = Math.min((ts - startTs) / 1200, 1); // 1.2 секунди
+        const t = Math.min((ts - startTime) / 1600, 1);  // 1.6 с
+        const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
         years.forEach(d => {
-          d.x = d.x * (1 - progress * 2.8);   // сильно до центру
-          d.y = d.y * (1 - progress * 2.8);
-          d.z += 5200 * progress;             // дуже сильний політ уперед
+          d.x += (0 - d.x) * e * 2.2;
+          d.y += (0 - d.y) * e * 2.2;
+          d.z += 3200 * e;
 
-          const scale = 1 + progress * 6;
-          const blur = progress * 18;
+          const scale = 1 + e * 3.5;
+          const blur = e * 14;
 
           d.el.style.transform = `translate3d(${d.x}px, ${d.y}px, ${d.z}px) scale(${scale})`;
-          d.el.style.opacity = Math.max(0, 0.65 - progress * 1.8);
+          d.el.style.opacity = Math.max(0, d.baseOpacity - e * 1.6);
           d.el.style.filter = `blur(${blur}px)`;
         });
 
-        // Камера теж летить уперед
-        scene.style.transform = `translateZ(${-900 * progress}px)`;
-
-        if (progress >= 1) {
-          location.replace('./main.html#overview');
+        if (t >= 1) {
+          location.href = './main.html#overview';
         }
       }
 
@@ -156,11 +188,10 @@
     btn.addEventListener('click', () => {
       if (flying) return;
       flying = true;
-      startTs = performance.now();
+      startTime = performance.now();
       document.body.classList.add('flying');
       fade.style.opacity = '1';
-      
-      console.log("%c=== ПОЛІТ ЗАПУЩЕНО ===", "color:#0f0; font-size:16px");
+      btn.style.pointerEvents = 'none';
     });
   </script>
 </body>
