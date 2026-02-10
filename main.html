@@ -12,9 +12,6 @@
       --bg0:#05070d;
       --bg1:#070a14;
       --text:#e8eefc;
-      --muted: rgba(232,238,252,.70);
-      --line: rgba(232,238,252,.10);
-
       --hero: #f3eed7;
     }
 
@@ -30,14 +27,12 @@
       overflow:hidden;
     }
 
-    /* 3D canvas holder */
     #gallery3d{
       position: fixed;
       inset: 0;
       z-index: 1;
     }
 
-    /* subtle vignette like cinematic */
     .vignette{
       position: fixed; inset: 0;
       pointer-events:none;
@@ -47,7 +42,6 @@
       mix-blend-mode: multiply;
     }
 
-    /* overlay UI */
     #overlay{
       position: fixed;
       inset: 0;
@@ -61,7 +55,6 @@
     }
 
     .hero{
-      pointer-events:none;
       max-width: 1100px;
       width: min(1100px, 92vw);
     }
@@ -78,25 +71,12 @@
 
     .hero p{
       margin: 0;
-      color: rgba(232,238,252,.72);
+      color: rgba(232,238,252,.70);
       font-size: 15px;
       line-height: 1.6;
       letter-spacing: .02em;
     }
 
-    /* bottom hint */
-    .hint{
-      position: fixed;
-      left: 18px;
-      bottom: 14px;
-      z-index: 3;
-      font-size: 12px;
-      color: rgba(232,238,252,.55);
-      pointer-events:none;
-      user-select:none;
-    }
-
-    /* small top-right badge */
     .badge{
       position: fixed;
       right: 18px;
@@ -122,21 +102,16 @@
   <div id="overlay">
     <div class="hero">
       <h1>Галерея курсу</h1>
-      <p>Колесо миші — переміщення. Далі додамо “занурення”, інерцію, snap, клік і відкриття картки як у 100lostspecies.</p>
+      <p>Прокручуй колесо або перетягуй мишею. Потягни вгору — з’явиться третя стрічка.</p>
     </div>
   </div>
 
   <div class="badge">WebGL • Three.js</div>
-  <div class="hint">Wheel → move</div>
 
   <script type="module">
     import { initMainGallery } from "./libs/main-gallery.js";
-
     const mountEl = document.getElementById("gallery3d");
-    const overlayEl = document.getElementById("overlay");
-
-    // стартуємо
-    initMainGallery({ mountEl, overlayEl });
+    initMainGallery({ mountEl });
   </script>
 </body>
 </html>
