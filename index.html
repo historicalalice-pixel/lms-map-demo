@@ -8,38 +8,33 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
 
-    * { box-sizing: border-box; margin:0; padding:0; }
+    * { margin:0; padding:0; box-sizing:border-box; }
     body {
       height: 100vh;
       background: #000;
       color: #f3eed7;
       font-family: 'Inter', sans-serif;
       overflow: hidden;
-      cursor: default;
     }
 
     #scene {
       position: fixed;
       inset: 0;
-      perspective: 2200px;               /* глибше для сильного ефекту */
-      transform-style: preserve-3d;
-      background: radial-gradient(circle at 50% 40%, #0a0a0a 0%, #000 75%);
-      will-change: transform;
+      perspective: 2400px;
+      background: radial-gradient(circle at 50% 40%, #111 0%, #000 80%);
     }
 
     .year {
       position: absolute;
       left: 50%; top: 50%;
-      transform: translate(-50%, -50%);
       font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2rem, 6vw, 7.5rem);
       font-weight: 500;
-      font-size: clamp(1.8rem, 5vw, 6.5rem);
-      letter-spacing: 0.06em;
-      color: rgba(243, 238, 215, 0.55);   /* чітко видно */
-      text-shadow: 0 0 18px rgba(243,238,215,0.45), 0 0 40px rgba(0,0,0,0.9);
+      color: rgba(243, 238, 215, 0.65);
+      text-shadow: 0 0 25px rgba(243,238,215,0.5);
       pointer-events: none;
+      transform: translate(-50%, -50%);
       will-change: transform, opacity, filter;
-      backface-visibility: hidden;
     }
 
     .intro {
@@ -51,42 +46,21 @@
       justify-content: center;
       text-align: center;
       z-index: 10;
-      padding: 5vw;
-      transition: opacity 1.2s ease-out, transform 1.6s cubic-bezier(0.16,1,0.3,1);
+      transition: opacity 1.4s ease;
     }
 
-    h1 {
-      font-size: clamp(4.5rem, 12vw, 14rem);
-      font-weight: 500;
-      margin: 0 0 1.5rem;
-      line-height: 0.9;
-      text-shadow: 0 15px 60px rgba(0,0,0,0.8);
-    }
-
-    .subtitle {
-      font-size: clamp(1.3rem, 2.8vw, 2rem);
-      max-width: 800px;
-      opacity: 0.92;
-      line-height: 1.6;
-      margin: 0 0 4rem;
-    }
+    h1 { font-size: clamp(5rem, 13vw, 15rem); margin-bottom: 1.5rem; line-height: 0.88; }
+    .subtitle { font-size: 1.6rem; max-width: 820px; opacity: 0.9; margin-bottom: 4rem; }
 
     button {
-      font-size: 1.15rem;
-      letter-spacing: 0.35em;
+      padding: 1.4rem 4.5rem;
+      font-size: 1.2rem;
+      letter-spacing: 0.4em;
       text-transform: uppercase;
-      padding: 1.3rem 4rem;
       background: transparent;
+      border: 2px solid #f3eed7;
       color: #f3eed7;
-      border: 2px solid rgba(243,238,215,0.5);
       cursor: pointer;
-      transition: all 0.5s ease;
-    }
-
-    button:hover {
-      border-color: #f3eed7;
-      background: rgba(243,238,215,0.1);
-      transform: translateY(-4px) scale(1.03);
     }
 
     #fade {
@@ -94,19 +68,11 @@
       inset: 0;
       background: #000;
       opacity: 0;
-      transition: opacity 1.4s ease-in;
-      z-index: 30;
-      pointer-events: none;
+      transition: opacity 1.6s ease;
+      z-index: 20;
     }
 
-    body.flying .intro {
-      opacity: 0;
-      transform: translateY(-15%) scale(0.85);
-    }
-
-    body.flying #fade {
-      opacity: 1;
-    }
+    body.flying .intro { opacity: 0; }
   </style>
 </head>
 <body>
@@ -115,7 +81,7 @@
 
   <div class="intro">
     <h1>Навчання — це подорож</h1>
-    <p class="subtitle">Через століття знань і відкриттів.<br>Час невблаганний. Почніть, поки є можливість.</p>
+    <p class="subtitle">Крізь час і знання</p>
     <button id="go">ПОЧАТИ</button>
   </div>
 
@@ -123,87 +89,79 @@
 
   <script>
     const scene = document.getElementById('scene');
-    const goBtn = document.getElementById('go');
+    const btn = document.getElementById('go');
     const fade = document.getElementById('fade');
 
-    const COUNT = 160;
     const years = [];
     const now = new Date().getFullYear();
 
-    for (let i = 0; i < COUNT; i++) {
+    // Створюємо дати
+    for (let i = 0; i < 180; i++) {
       const el = document.createElement('div');
       el.className = 'year';
-      const year = 1700 + Math.floor(Math.random() * (now + 50 - 1700));
-      el.textContent = year;
+      el.textContent = 1650 + Math.floor(Math.random() * (now + 80 - 1650));
       scene.appendChild(el);
 
-      const data = {
-        el,
-        x: (Math.random() - 0.5) * 2200,
-        y: (Math.random() - 0.5) * 1600,
-        z: (Math.random() - 0.5) * 3000 - 800,
-        vx: (Math.random() - 0.5) * 2.2,
-        vy: (Math.random() - 0.5) * 1.8,
-        vz: (Math.random() - 0.5) * 1.4,
-        opacity: 0.38 + Math.random() * 0.42
-      };
-      years.push(data);
-      el.style.opacity = data.opacity;
-      el.style.transform = `translate3d(${data.x}px,${data.y}px,${data.z}px)`;
+      years.push({
+        el: el,
+        x: (Math.random() - 0.5) * 2400,
+        y: (Math.random() - 0.5) * 1800,
+        z: (Math.random() - 0.5) * 2800 - 900,
+        vx: (Math.random() - 0.5) * 3,
+        vy: (Math.random() - 0.5) * 2.5,
+        vz: (Math.random() - 0.5) * 2
+      });
     }
 
-    let isFlying = false;
-    let flyStart = 0;
+    let flying = false;
+    let startTs = 0;
 
-    function raf(ts) {
-      if (!isFlying) {
-        // Дрейфування — помітніше
+    function animate(ts) {
+      if (!flying) {
         years.forEach(d => {
           d.x += d.vx;
           d.y += d.vy;
           d.z += d.vz;
-          d.el.style.transform = `translate3d(${d.x}px,${d.y}px,${d.z}px)`;
+          d.el.style.transform = `translate3d(${d.x}px, ${d.y}px, ${d.z}px)`;
         });
       } else {
-        const elapsed = ts - flyStart;
-        const t = Math.min(elapsed / 1400, 1);  // 1.4 секунди — швидко і драматично
-        const e = t < 0.3 ? 8 * t**3 : 1 - (-2*t + 2)**3 / 2;  // різкий старт, плавне уповільнення
+        const progress = Math.min((ts - startTs) / 1200, 1); // 1.2 секунди
 
         years.forEach(d => {
-          // Швидке зібрання до центру + політ уперед
-          const pull = e * 3.5;
-          d.x += (0 - d.x) * pull;
-          d.y += (0 - d.y) * pull;
-          d.z += 3800 * e + d.vz * 80;   // дуже сильний Z-поштовх
+          d.x = d.x * (1 - progress * 2.8);   // сильно до центру
+          d.y = d.y * (1 - progress * 2.8);
+          d.z += 5200 * progress;             // дуже сильний політ уперед
 
-          d.opacity = Math.max(0, d.opacity - e * 2.2);
-          d.el.style.opacity = d.opacity;
-          d.el.style.filter = `blur(${e * 12}px)`;  // сильне розмиття
-          d.el.style.transform = `translate3d(${d.x}px,${d.y}px,${d.z}px) scale(${1 + e * 4})`;  // масштабування
+          const scale = 1 + progress * 6;
+          const blur = progress * 18;
+
+          d.el.style.transform = `translate3d(${d.x}px, ${d.y}px, ${d.z}px) scale(${scale})`;
+          d.el.style.opacity = Math.max(0, 0.65 - progress * 1.8);
+          d.el.style.filter = `blur(${blur}px)`;
         });
 
-        // Камера летить уперед + легке тремтіння
-        const camZ = -1200 * e;
-        scene.style.transform = `translate3d(0,0,${camZ}px) scale(${1 + e * 0.6})`;
+        // Камера теж летить уперед
+        scene.style.transform = `translateZ(${-900 * progress}px)`;
 
-        if (elapsed > 1400) {
-          location.replace('./main.html#overview');  // replace — без історії назад
+        if (progress >= 1) {
+          location.replace('./main.html#overview');
         }
       }
 
-      requestAnimationFrame(raf);
+      requestAnimationFrame(animate);
     }
 
-    requestAnimationFrame(raf);
+    requestAnimationFrame(animate);
 
-    goBtn.onclick = () => {
-      if (isFlying) return;
-      isFlying = true;
-      flyStart = performance.now();
+    btn.addEventListener('click', () => {
+      if (flying) return;
+      flying = true;
+      startTs = performance.now();
       document.body.classList.add('flying');
       fade.style.opacity = '1';
-      goBtn.disabled = true;
-    };
+      
+      console.log("%c=== ПОЛІТ ЗАПУЩЕНО ===", "color:#0f0; font-size:16px");
+    });
   </script>
 </body>
 </html>
