@@ -1,12 +1,22 @@
 // libs/main-gallery.js
-// CDN-версія Three.js (безкоштовно, без локального three.module.js)
-import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import * as THREE from "./three.module.js";
 
+/**
+ * Main Gallery (100lostspecies-like belts)
+ * - 2 belts visible by default, 3rd sits above and appears when user drags upward / scrolls up
+ * - infinite loop horizontally (around cylinder) and vertically (belts wrap)
+ * - slow auto-drift + wheel + drag with inertia
+ */
 export function initMainGallery({ mountEl }) {
+  // cleanup previous canvas
   mountEl.innerHTML = "";
 
   // ---------- renderer ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    powerPreference: "high-performance",
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
   renderer.setClearColor(0x000000, 0);
@@ -16,65 +26,82 @@ export function initMainGallery({ mountEl }) {
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(
-    55,
+    52,
     mountEl.clientWidth / mountEl.clientHeight,
     0.1,
-    6000
+    8000
   );
 
-  // ближче, щоб плитки були “перед очима”
-  camera.position.set(0, 0, 240);
-  camera.lookAt(0, 0, 0);
+  // camera sits slightly inside, looking forward (-Z)
+  camera.position.set(0, 0, 0);
+  camera.lookAt(0, 0, -1);
 
-  // ---------- state ----------
-  const mouse = { x: 0, y: 0 };
-  let scrollVel = 0;
-  let scrollPos = 0;
-
-  // drag up => reveal third belt
-  let isDown = false;
-  let lastY = 0;
-  let reveal = 0;        // 0..1 (3-тя стрічка)
-  let revealVel = 0;
-
+  // ---------- utils ----------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
+  const damp = (cur, target, lambda, dt) =>
+    lerp(cur, target, 1 - Math.exp(-lambda * dt));
+
+  // ---------- interaction state ----------
+  const mouse = { x: 0, y: 0 };
+  let wheelVelY = 0;     // vertical move velocity
+  let wheelVelX = 0;     // horizontal drift velocity (belt rotation)
+  let scrollY = 0;       // vertical position (world)
+  let scrollX = 0;       // horizontal rotation phase
+
+  // drag-to-pull-up (for hidden 3rd belt feeling)
+  let isDown = false;
+  let downX = 0;
+  let downY = 0;
+  let dragVelY = 0;
+  let dragVelX = 0;
 
   function onMouseMove(e) {
     const r = renderer.domElement.getBoundingClientRect();
     const nx = (e.clientX - r.left) / r.width;
     const ny = (e.clientY - r.top) / r.height;
-    mouse.x = (nx - 0.5) * 2;
-    mouse.y = (ny - 0.5) * 2;
-
-    if (isDown) {
-      const dy = e.clientY - lastY;
-      lastY = e.clientY;
-
-      // тягнеш ВГОРУ => dy від’ємний => reveal росте
-      revealVel += (-dy) * 0.0022;
-    }
+    mouse.x = (nx - 0.5) * 2; // -1..1
+    mouse.y = (ny - 0.5) * 2; // -1..1
   }
+  window.addEventListener("mousemove", onMouseMove);
 
   function onPointerDown(e) {
     isDown = true;
-    lastY = e.clientY;
+    downX = e.clientX;
+    downY = e.clientY;
+    dragVelX = 0;
+    dragVelY = 0;
   }
+  function onPointerMove(e) {
+    if (!isDown) return;
+    const dx = e.clientX - downX;
+    const dy = e.clientY - downY;
+    downX = e.clientX;
+    downY = e.clientY;
 
+    // dragging up (dy negative) reveals upper belt (move "up")
+    // Keep it gentle (no jerks)
+    dragVelY += (-dy) * 0.012; // vertical
+    dragVelX += (dx) * 0.0009; // horizontal
+  }
   function onPointerUp() {
     isDown = false;
   }
 
-  window.addEventListener("mousemove", onMouseMove);
-  window.addEventListener("mousedown", onPointerDown);
-  window.addEventListener("mouseup", onPointerUp);
+  renderer.domElement.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
 
   renderer.domElement.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
-      const d = clamp(e.deltaY, -140, 140);
-      scrollVel += d * 0.0010; // керовано, не різко
+      // wheel: mainly vertical travel (like moving inside the sphere)
+      const dy = clamp(e.deltaY, -160, 160);
+      wheelVelY += dy * 0.010;
+
+      // a tiny horizontal influence so it never feels dead
+      wheelVelX += dy * 0.0000025;
     },
     { passive: false }
   );
@@ -83,87 +110,97 @@ export function initMainGallery({ mountEl }) {
   const world = new THREE.Group();
   scene.add(world);
 
-  // геометрія плиток (більші)
-  const CARD_W = 130;
-  const CARD_H = 86;
-  const geo = new THREE.PlaneGeometry(CARD_W, CARD_H);
+  // ---------- belts parameters ----------
+  // cylinder radius controls “inside-sphere” curvature
+  const R = 320;               // closer curvature
+  const BELT_SPACING = 110;    // vertical distance between belts
 
-  // без світла — завжди видно
+  // how many cards around the ring
+  const PER = 64;              // more = denser + no gaps
+  const STEP = (Math.PI * 2) / PER;
+
+  // card size (bigger + closer like reference)
+  const CARD_W = 150;
+  const CARD_H = 96;
+
+  // palette (placeholder colors)
   const palette = [
-    0x86b7ff, 0x7ff0c7, 0xd3a6ff, 0xffc59a,
-    0x9ad0ff, 0x95f0d0, 0xe5b8ff, 0xffd6aa,
+    0x9fd3ff, 0xb4ffd8, 0xd8b9ff, 0xffd2b0,
+    0xbbe3ff, 0xc6ffd8, 0xf0c8ff, 0xffe1b8,
+    0xa9bfff, 0xb1ffd0, 0xe6c2ff, 0xffc7a6,
   ];
 
-  function makeMat(i) {
-    return new THREE.MeshBasicMaterial({
+  function makeCard(i) {
+    const geo = new THREE.PlaneGeometry(CARD_W, CARD_H);
+    const mat = new THREE.MeshBasicMaterial({
       color: palette[i % palette.length],
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.92,
-      depthWrite: false,
+      depthWrite: false, // less popping
     });
+    const mesh = new THREE.Mesh(geo, mat);
+    return mesh;
   }
 
-  // belt params (кільце — нескінченне)
-  const R1 = 215;
-  const R2 = 240;
-  const R3 = 265;
-
-  const PER = 34; // більше плиток по колу (щільніше/довше)
-  const STEP = (Math.PI * 2) / PER;
-
-  function createBelt({ y, radius, seed }) {
+  function createBelt(seed = 0) {
     const belt = new THREE.Group();
-    belt.position.y = y;
     world.add(belt);
 
     const cards = [];
     for (let i = 0; i < PER; i++) {
-      const mesh = new THREE.Mesh(geo, makeMat(i + seed));
-      // легкий нахил “як у стрічки”, але НЕ швидкий
+      const mesh = makeCard(i + seed);
+
+      // subtle random tilt (but NOT spinning fast)
       mesh.rotation.z = (Math.random() - 0.5) * 0.18;
-      mesh.rotation.x = (Math.random() - 0.5) * 0.12;
 
       belt.add(mesh);
-
       cards.push({
         mesh,
         base: i * STEP,
-        phase: Math.random() * 1000,
+        wob: Math.random() * 1000,
       });
     }
 
-    return { belt, cards, radius };
+    return { belt, cards };
   }
 
-  const belt1 = createBelt({ y: -52, radius: R1, seed: 0 });
-  const belt2 = createBelt({ y:  18, radius: R2, seed: 40 });
+  // 3 belts (3rd initially above viewport; we’ll reveal by moving up)
+  const belts = [
+    { ...createBelt(0),  baseY: -0.5 * BELT_SPACING },
+    { ...createBelt(40), baseY:  0.5 * BELT_SPACING },
+    { ...createBelt(90), baseY:  1.5 * BELT_SPACING }, // "hidden" above (revealed when scrollY goes negative)
+  ];
 
-  // 3-тя стрічка стартує ВИСОКО і “невидима”
-  const belt3 = createBelt({ y: 120, radius: R3, seed: 90 });
+  // ---------- rendering logic ----------
+  function updateBelt(b, t, phaseX) {
+    // We look forward along -Z, so "front" is z negative.
+    // Offset by -PI/2 to place many cards in front initially.
+    const frontOffset = -Math.PI / 2;
 
-  function updateBelt(B, t, scroll, radius, extraOpacity = 1) {
-    for (const c of B.cards) {
-      const a = c.base + scroll;
+    for (const c of b.cards) {
+      const a = c.base + phaseX + frontOffset;
 
-      // коло навколо Y
-      const x = Math.cos(a) * radius;
-      const z = Math.sin(a) * radius;
+      const x = Math.cos(a) * R;
+      const z = Math.sin(a) * R;
 
-      // дуже легкий "живий" wobble, повільний
-      const wob = Math.sin(t * 0.55 + c.phase) * 1.4;
+      // gentle wobble, very small
+      const wobY = Math.sin(t * 0.65 + c.wob) * 3.0;
 
-      c.mesh.position.set(x, wob, z);
+      c.mesh.position.set(x, wobY, z);
 
-      // “всередині сфери”: плитка дивиться в центр
+      // Face inward to center -> we are "inside"
       c.mesh.lookAt(0, 0, 0);
 
-      // глибина: ближче до камери (z ближче до +radius) => більша/яскравіша
-      const front = (z / radius + 1) * 0.5; // 0..1
-      const s = lerp(0.82, 1.28, front);
+      // Fade/scale based on how much in front (z negative is front)
+      // map z: [-R..+R] -> [1..0]
+      const front = clamp(((-z) / R + 1) * 0.5, 0, 1);
+
+      const s = lerp(0.92, 1.55, Math.pow(front, 1.15));
       c.mesh.scale.set(s, s, 1);
 
-      c.mesh.material.opacity = lerp(0.20, 0.95, front) * extraOpacity;
+      // opacity stronger in front so dates/cards visible
+      c.mesh.material.opacity = lerp(0.18, 0.92, Math.pow(front, 1.1));
     }
   }
 
@@ -175,38 +212,65 @@ export function initMainGallery({ mountEl }) {
     last = now;
     const t = now / 1000;
 
-    // дуже повільний автодрифт (щоб не “крутилось швидко”)
-    scrollVel += 0.00022;
+    // slow auto drift (NOT fast)
+    const autoX = 0.12;   // horizontal slow
+    const autoY = 0.00;   // keep vertical neutral by default
 
-    // інерція
-    scrollVel *= Math.pow(0.88, dt * 60);
-    scrollPos += scrollVel;
+    wheelVelX += autoX * dt * 0.35;
+    wheelVelY += autoY * dt;
 
-    // reveal third belt (drag up)
-    revealVel *= Math.pow(0.86, dt * 60);
-    reveal += revealVel * dt * 60;
-    reveal = clamp(reveal, 0, 1);
+    // apply drag impulses
+    wheelVelY += dragVelY * dt;
+    wheelVelX += dragVelX * dt;
 
-    // 3-тя стрічка плавно опускається з 120 до 70
-    const targetY = lerp(120, 70, reveal);
-    belt3.belt.position.y = lerp(belt3.belt.position.y, targetY, 1 - Math.pow(0.85, dt * 60));
+    // decay drag velocities quickly
+    dragVelY *= Math.pow(0.15, dt * 60);
+    dragVelX *= Math.pow(0.20, dt * 60);
 
-    // паралакс камери (дуже делікатний)
-    const camX = mouse.x * 14;
-    const camY = -mouse.y * 9;
-    camera.position.x = lerp(camera.position.x, camX, 1 - Math.pow(0.90, dt * 60));
-    camera.position.y = lerp(camera.position.y, camY, 1 - Math.pow(0.90, dt * 60));
-    camera.lookAt(0, 0, 0);
+    // inertia / friction (prevents jerk)
+    wheelVelY *= Math.pow(0.86, dt * 60);
+    wheelVelX *= Math.pow(0.90, dt * 60);
 
-    // belts різні швидкості, але спокійно
-    updateBelt(belt1, t, scrollPos * 1.00, belt1.radius, 1);
-    updateBelt(belt2, t, scrollPos * 0.92 + 1.2, belt2.radius, 1);
-    updateBelt(belt3, t, scrollPos * 0.96 + 2.4, belt3.radius, lerp(0.0, 1.0, reveal));
+    // integrate
+    scrollY += wheelVelY * dt * 60;
+    scrollX += wheelVelX * dt * 60;
+
+    // world vertical wrap => infinite belts
+    const totalH = BELT_SPACING * belts.length;
+    // keep scrollY around 0 for numeric stability
+    if (scrollY > totalH) scrollY -= totalH;
+    if (scrollY < -totalH) scrollY += totalH;
+
+    // Parallax camera (very gentle, like reference)
+    const targetCamX = mouse.x * 16;
+    const targetCamY = -mouse.y * 10;
+    camera.position.x = damp(camera.position.x, targetCamX, 6.5, dt);
+    camera.position.y = damp(camera.position.y, targetCamY, 6.5, dt);
+    camera.lookAt(0, 0, -1);
+
+    // Apply vertical travel by shifting belts (not camera) => stable framing
+    for (let i = 0; i < belts.length; i++) {
+      const b = belts[i];
+
+      // position each belt, then wrap into view window
+      let y = b.baseY - scrollY;
+
+      // wrap y into [-totalH/2 .. totalH/2] so belts recycle endlessly
+      while (y < -totalH / 2) y += totalH;
+      while (y >  totalH / 2) y -= totalH;
+
+      b.belt.position.y = y;
+
+      // slight different horizontal phases per belt (feels layered)
+      const beltPhase =
+        scrollX * (1 - i * 0.08) + i * 0.65;
+
+      updateBelt(b, t, beltPhase);
+    }
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
   }
-
   requestAnimationFrame(tick);
 
   // ---------- resize ----------
@@ -223,8 +287,9 @@ export function initMainGallery({ mountEl }) {
     destroy() {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mousedown", onPointerDown);
-      window.removeEventListener("mouseup", onPointerUp);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.dispose();
       mountEl.innerHTML = "";
     },
