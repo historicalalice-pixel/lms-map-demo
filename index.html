@@ -26,7 +26,7 @@
       overflow:hidden;
     }
 
-    /* дуже важливо: центр + preserve-3d */
+    /* центр + preserve-3d */
     #cloud{
       position:absolute;
       left:50%;
@@ -45,12 +45,12 @@
       font-weight:400;
       font-size:clamp(1.1rem, 2.8vw, 2.8rem);
 
-      color: rgba(243,238,215,0.55);
+      color: rgba(243, 238, 215, 0.55);
       text-shadow: 0 0 16px rgba(243,238,215,0.25);
       pointer-events:none;
       user-select:none;
 
-      /* щоб число було по центру своєї точки */
+      /* число центрується в своїй точці */
       transform: translate3d(0,0,0) translate(-50%,-50%);
     }
 
@@ -68,17 +68,18 @@
       will-change:opacity;
     }
 
+    /* ✅ менший заголовок */
     h1{
       font-family:'Cormorant Garamond', serif;
-      font-size:clamp(3.2rem, 8vw, 7.2rem);
+      font-size: clamp(2.4rem, 6vw, 5.4rem);
       font-weight:500;
       line-height:0.92;
-      margin-bottom:1.2rem;
+      margin-bottom:1.1rem;
       letter-spacing:-0.01em;
     }
 
     .subtitle{
-      font-size:clamp(1.1rem, 2.4vw, 1.5rem);
+      font-size:clamp(1.05rem, 2.2vw, 1.45rem);
       max-width:720px;
       opacity:0.88;
       line-height:1.55;
@@ -136,16 +137,23 @@
     const btn = document.getElementById('startBtn');
     const fade = document.getElementById('fade');
 
-    const rand = (a,b)=> a + Math.random()*(b-a);
+    const rand  = (a,b)=> a + Math.random()*(b-a);
     const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
     const easeInOutCubic = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+
+    // ✅ реакція на мишку
+    let mx = 0, my = 0;
+    window.addEventListener('mousemove', (e)=>{
+      mx = (e.clientX / window.innerWidth - 0.5);
+      my = (e.clientY / window.innerHeight - 0.5);
+    });
 
     const years = [];
     const now = new Date().getFullYear();
     const minY = 1700;
     const maxY = now + 40;
 
-    // генерація років навколо центру (реально видно)
+    // генерація років навколо центру
     const COUNT = 90;
     for (let i=0; i<COUNT; i++){
       const el = document.createElement('div');
@@ -153,9 +161,8 @@
       el.textContent = Math.floor(rand(minY, maxY+1));
       cloud.appendChild(el);
 
-      // розкладка хмарою навколо центру
-      const a = rand(0, Math.PI*2);
-      const r = rand(120, 720);
+      const a  = rand(0, Math.PI*2);
+      const r  = rand(120, 720);
       const x0 = Math.cos(a)*r + rand(-180,180);
       const y0 = Math.sin(a)*r*0.65 + rand(-140,140);
       const z0 = rand(-900, 240);
@@ -164,10 +171,13 @@
         el,
         x0, y0, z0,
         x: x0, y: y0, z: z0,
-        vx: rand(-0.06, 0.06),
-        vy: rand(-0.05, 0.05),
-        vz: rand(-0.03, 0.03),
-        o:  rand(0.38, 0.78)
+
+        // ✅ сильніший рух
+        vx: rand(-0.22, 0.22),
+        vy: rand(-0.18, 0.18),
+        vz: rand(-0.10, 0.10),
+
+        o: rand(0.38, 0.78)
       };
       years.push(p);
 
@@ -179,19 +189,28 @@
     let flying = false;
     let startTime = 0;
 
-    // параметри польоту
+    // політ
     const FLIGHT_MS = 1400;
-    const Z_BOOST = 2600;     // наскільки “летимо в камеру”
-    const PULL = 0.16;        // наскільки стягує в центр
+    const Z_BOOST = 2600;
+    const PULL = 0.16;
 
     function animate(ts){
       if (!flying){
-        // тихий дрейф + легке повернення до стартової точки
-        for (const p of years){
-          p.x += p.vx;
-          p.y += p.vy;
-          p.z += p.vz;
+        // ✅ паралакс/камера в idle
+        const camX = mx * 60;
+        const camY = my * 40;
+        const rotX = (-my * 6);
+        const rotY = ( mx * 8);
+        cloud.style.transform =
+          `translate3d(${camX}px, ${camY}px, 0) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
 
+        // ✅ помітніший дрейф
+        for (const p of years){
+          p.x += p.vx * 1.25;
+          p.y += p.vy * 1.25;
+          p.z += p.vz * 1.10;
+
+          // легке повернення до стартових точок (щоб не "попливли" назавжди)
           p.x -= (p.x - p.x0) * 0.002;
           p.y -= (p.y - p.y0) * 0.002;
           p.z -= (p.z - p.z0) * 0.002;
@@ -200,6 +219,7 @@
           p.el.style.filter = 'none';
           p.el.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px) translate(-50%,-50%)`;
         }
+
         requestAnimationFrame(animate);
         return;
       }
@@ -207,15 +227,17 @@
       const t = clamp((ts - startTime) / FLIGHT_MS, 0, 1);
       const e = easeInOutCubic(t);
 
-      // “камера” трохи під’їжджає
-      cloud.style.transform = `translate3d(0,0,${-(e*520)}px)`;
+      // ✅ паралакс/камера у польоті теж
+      const camX = mx * 30;
+      const camY = my * 22;
+      const rotX = (-my * 6) + (-6 * e);
+      const rotY = ( mx * 8) + ( 8 * e);
+      cloud.style.transform =
+        `translate3d(${camX}px, ${camY}px, ${-(e*520)}px) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
 
       for (const p of years){
-        // стягуємо до центру (0,0) — тепер це центр екрану, а не кут!
         const x = p.x0 * (1 - e*PULL);
         const y = p.y0 * (1 - e*PULL);
-
-        // головний проліт у z
         const z = p.z0 + (Z_BOOST * e);
 
         const blur = e * 1.2;
@@ -226,7 +248,7 @@
         p.el.style.transform = `translate3d(${x}px, ${y}px, ${z}px) translate(-50%,-50%)`;
       }
 
-      // fade трохи пізніше, щоб проліт було видно
+      // fade пізніше, щоб проліт було видно
       if (t > 0.62) fade.style.opacity = String((t - 0.62) / 0.38);
 
       if (t >= 1){
