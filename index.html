@@ -161,20 +161,17 @@
 <div class="hint">ПОЧАТИ → проліт → main.html#overview</div>
 
 <script>
-  // helpers
   const rand = (min, max) => min + Math.random()*(max-min);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const easeInOutCubic = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
   const easeOutCubic = t => 1 - Math.pow(1-t, 3);
 
-  // DOM
   const stage = document.getElementById('stage');
   const cloud = document.getElementById('cloud');
   const warp  = document.getElementById('warp');
   const enterBtn = document.getElementById('enterBtn');
   const fade = document.getElementById('fadeOverlay');
 
-  // years
   const YEARS_COUNT = 70;
   const years = [];
   const now = new Date().getFullYear();
@@ -194,8 +191,7 @@
     const z0 = rand(-320, 260);
 
     const p = {
-      el,
-      x0,y0,z0,
+      el, x0,y0,z0,
       x:x0,y:y0,z:z0,
       vx: rand(-0.06, 0.06),
       vy: rand(-0.05, 0.05),
@@ -209,7 +205,6 @@
     el.style.transform = `translate3d(${x0}px,${y0}px,${z0}px) scale(${p.s})`;
   }
 
-  // warp streaks
   const STREAKS = 46;
   const streaks = [];
   for (let i=0;i<STREAKS;i++){
@@ -228,21 +223,18 @@
     streaks.push({ el:s, z, sp, y:0 });
   }
 
-  // mouse cam
   let mx=0, my=0;
   window.addEventListener('mousemove', (e)=>{
     mx = (e.clientX / window.innerWidth - 0.5);
     my = (e.clientY / window.innerHeight - 0.5);
   });
 
-  // flight state
   let flying = false;
   let flightStart = 0;
   const FLIGHT_MS = 1050;
   const REDIRECT_AFTER = 1250;
 
   function tick(ts){
-    // base cam drift
     const camX = mx * 40;
     const camY = my * 28;
 
@@ -264,7 +256,6 @@
       return;
     }
 
-    // flight
     const t = clamp((ts - flightStart) / FLIGHT_MS, 0, 1);
     const e = easeInOutCubic(t);
     const eo = easeOutCubic(t);
@@ -305,7 +296,6 @@
 
   requestAnimationFrame(tick);
 
-  // click
   enterBtn.addEventListener('click', ()=>{
     if (flying) return;
     flying = true;
@@ -315,8 +305,6 @@
     flightStart = performance.now();
 
     setTimeout(()=>{ fade.style.opacity = '1'; }, 720);
-
-    // IMPORTANT: go to overview view
     setTimeout(()=>{ window.location.href = './main.html#overview'; }, REDIRECT_AFTER);
   });
 </script>
