@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>LMS — Початок</title>
 
   <style>
@@ -10,95 +10,65 @@
 
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
-    body{
-      background:#000;
-      color:#f3eed7;
-      overflow:hidden;
-      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
+    body{overflow:hidden;background:#000;color:#f3eed7}
 
-    /* сцена */
-    #intro{
+    #wrap{
       position:fixed; inset:0;
       background:
         radial-gradient(1200px 700px at 50% 45%, rgba(70,85,180,.22), rgba(10,10,18,.92) 60%, #000 100%);
-      overflow:hidden;
     }
+    canvas{display:block;width:100%;height:100%}
 
-    /* “камера”: perspective + 3D */
-    #stage{
-      position:absolute; inset:0;
-      perspective:1400px;
-      transform-style:preserve-3d;
-    }
-
-    /* контейнер для всіх дат (на нього вішаємо “камеру”) */
-    #world{
-      position:absolute; inset:0;
-      transform-style:preserve-3d;
-      will-change:transform;
-    }
-
-    /* дати */
-    .year{
-      position:absolute;
-      left:50%; top:50%;
-      transform-style:preserve-3d;
-      will-change:transform, opacity, filter;
-
-      font-family:'Cormorant Garamond', serif;
-      font-weight:400;
-      letter-spacing:-0.01em;
-      color: rgba(243,238,215,.34);
-      text-shadow: 0 0 14px rgba(243,238,215,.18);
-      pointer-events:none;
-      user-select:none;
-
-      /* трішки “плівки” */
-      filter: saturate(.95) contrast(1.03);
-    }
-
-    /* контент */
     .intro{
-      position:absolute; inset:0;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
+      position:fixed; inset:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
       text-align:center;
-      padding: 6vw;
-      z-index:5;
+      padding:6vw;
+      z-index:2;
+      pointer-events:none;
       transition: opacity 1.2s ease;
+    }
+    .intro::before{
+      content:"";
+      position:absolute;
+      width:min(980px,92vw);
+      height:min(520px,60vh);
+      border-radius:999px;
+      background: radial-gradient(closest-side, rgba(0,0,0,.58), rgba(0,0,0,0));
+      z-index:-1;
     }
 
     h1{
-      font-family:'Cormorant Garamond', serif;
-      font-weight:500;
-      font-size: clamp(3.2rem, 8vw, 7.2rem);
-      line-height: .92;
-      letter-spacing:-0.01em;
       margin:0 0 1.1rem;
+      font-family:"Cormorant Garamond", serif;
+      font-weight:500;
+      font-size:clamp(3.0rem, 7.6vw, 6.8rem);
+      line-height:.92;
+      letter-spacing:-0.01em;
+      color:rgba(243,238,215,.96);
       text-shadow: 0 24px 80px rgba(0,0,0,.55);
     }
-
     .subtitle{
       margin:0 0 2.6rem;
-      font-size: clamp(1.05rem, 2.2vw, 1.5rem);
+      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-size:clamp(1.05rem,2.2vw,1.5rem);
       opacity:.86;
-      max-width: 820px;
       line-height:1.55;
+      max-width:820px;
     }
 
     #startBtn{
-      padding: 1rem 3.5rem;
-      font-size: .95rem;
-      letter-spacing: .32em;
-      text-transform: uppercase;
-      background: transparent;
-      border: 1.5px solid rgba(243,238,215,.55);
+      pointer-events:auto;
+      padding:1rem 3.5rem;
+      font-size:.95rem;
+      letter-spacing:.32em;
+      text-transform:uppercase;
+      background:transparent;
+      border:1.5px solid rgba(243,238,215,.55);
       color:#f3eed7;
       cursor:pointer;
-      transition: transform .35s ease, background .35s ease, border-color .35s ease, opacity .35s ease;
+      transition:transform .35s ease, background .35s ease, border-color .35s ease, opacity .35s ease;
     }
     #startBtn:hover{
       border-color: rgba(243,238,215,.92);
@@ -107,267 +77,254 @@
     }
     #startBtn:active{ transform: translateY(-1px) scale(.99); }
 
-    /* fade + vignette */
     #fade{
       position:fixed; inset:0;
       background:#000;
       opacity:0;
-      transition: opacity 1.35s ease;
-      z-index:10;
+      transition: opacity 1.25s ease;
       pointer-events:none;
+      z-index:3;
     }
 
-    /* при “зануренні” */
-    body.flying .intro{ opacity:0; }
-    body.flying #startBtn{ opacity:0; }
-
-    /* м’яка віньєтка поверх */
     #vignette{
-      position:absolute; inset:-2px;
-      background:
-        radial-gradient(1200px 800px at 50% 50%, transparent 40%, rgba(0,0,0,.65) 100%);
+      position:fixed; inset:-2px;
+      background: radial-gradient(1200px 800px at 50% 50%, transparent 42%, rgba(0,0,0,.68) 100%);
       pointer-events:none;
-      z-index:4;
-      mix-blend-mode: multiply;
-      opacity:.8;
+      z-index:1;
+      opacity:.85;
     }
+
+    body.flying .intro{opacity:0}
   </style>
 </head>
 
 <body>
-  <div id="intro">
-    <div id="stage">
-      <div id="world"></div>
-    </div>
+  <div id="wrap"></div>
+  <div id="vignette"></div>
 
-    <div id="vignette" aria-hidden="true"></div>
-
-    <div class="intro">
-      <h1>Навчання — це подорож</h1>
-      <p class="subtitle">Крізь час і знання</p>
-      <button id="startBtn">ПОЧАТИ</button>
-    </div>
+  <div class="intro">
+    <h1>Навчання — це подорож</h1>
+    <p class="subtitle">Крізь час і знання</p>
+    <button id="startBtn">ПОЧАТИ</button>
   </div>
-
   <div id="fade"></div>
 
-  <script>
-    const world = document.getElementById('world');
-    const btn   = document.getElementById('startBtn');
-    const fade  = document.getElementById('fade');
+  <!-- Three.js з CDN -->
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
 
-    // === параметри “як у 100lostspecies”-стилі (3D поле + камера) ===
-    const CFG = {
-      count: 120,            // кількість дат
-      minYear: 1700,
-      maxYear: new Date().getFullYear() + 40,
+    const wrap = document.getElementById("wrap");
+    const btn  = document.getElementById("startBtn");
+    const fade = document.getElementById("fade");
 
-      // розмір “об’єму”
-      radiusMin: 520,
-      radiusMax: 1500,
-      zMin: -1400,
-      zMax:  1200,
+    // renderer
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    wrap.appendChild(renderer.domElement);
 
-      // safe-zone (щоб не перекривати заголовок/кнопку)
-      safeRX: 520,           // ширина еліпса в центрі
-      safeRY: 260,           // висота еліпса в центрі
+    // scene
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x000000, 12, 80);
 
-      // рух/дрейф
-      drift: 0.55,           // сила мікродрейфу
-      spring: 0.018,         // повернення до базової позиції (щоб “не летіло вбік”)
+    // camera
+    const camera = new THREE.PerspectiveCamera(
+      55,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      200
+    );
+    camera.position.set(0, 0, 18);
 
-      // паралакс від миші
-      parallaxXY: 42,
-      rotX: 7,
-      rotY: 10,
+    // subtle light
+    const light = new THREE.DirectionalLight(0xffffff, 0.25);
+    light.position.set(1, 2, 3);
+    scene.add(light);
 
-      // “занурення”
-      flyZ: 2600,
-      flyDuration: 1650
-    };
+    // ====== Years field (sprites/textures) ======
+    // Робимо текстуру з текстом (рік) на canvas, потім Sprite
+    function makeYearSprite(text) {
+      const c = document.createElement("canvas");
+      const ctx = c.getContext("2d");
 
-    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-    const lerp = (a,b,t)=>a+(b-a)*t;
-    const rand = (a,b)=>a+Math.random()*(b-a);
+      const fontSize = 56;
+      const pad = 28;
 
-    // easing близький до “cinematic”
+      ctx.font = `${fontSize}px "Cormorant Garamond"`;
+      const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
+      const h = fontSize + pad * 2;
+
+      c.width = w;
+      c.height = h;
+
+      ctx.clearRect(0,0,w,h);
+      ctx.font = `${fontSize}px "Cormorant Garamond"`;
+      ctx.fillStyle = "rgba(243,238,215,0.32)";
+      ctx.shadowColor = "rgba(243,238,215,0.20)";
+      ctx.shadowBlur = 14;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      ctx.fillText(text, w/2, h/2);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false
+      });
+
+      const spr = new THREE.Sprite(mat);
+      // базовий scale підлаштовується від "глибини" далі
+      spr.scale.set(w/120, h/120, 1);
+      return spr;
+    }
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    const now = new Date().getFullYear();
+    const minY = 1700;
+    const maxY = now + 40;
+
+    const COUNT = 140;
+
+    // safe-zone: виріз у центрі, щоб текст не забивало
+    function inSafe(x,y){
+      const rx = 6.0, ry = 2.6;
+      const nx = x / rx;
+      const ny = y / ry;
+      return (nx*nx + ny*ny) < 1.0;
+    }
+
+    // розкидуємо точки у сфероподібному обʼємі перед камерою
+    const nodes = [];
+    for(let i=0;i<COUNT;i++){
+      const year = Math.floor(minY + Math.random()*(maxY-minY+1));
+      const spr = makeYearSprite(String(year));
+
+      let x,y,z;
+      let tries = 0;
+      do{
+        x = (Math.random()-0.5) * 26;     // ширина
+        y = (Math.random()-0.5) * 14;     // висота
+        z = -Math.random() * 90;          // вглиб (негатив)
+        tries++;
+        if(tries>80) break;
+      }while(inSafe(x,y) && z > -45);
+
+      spr.position.set(x,y,z);
+
+      // рандомний розмір: ближче = більші
+      const depth01 = THREE.MathUtils.clamp((-z) / 90, 0, 1);
+      const s = 0.6 + (1.0 - depth01) * 1.2; // ближче більші
+      spr.scale.multiplyScalar(s);
+
+      // легка прозорість
+      spr.material.opacity = 0.18 + (1.0 - depth01) * 0.22;
+
+      group.add(spr);
+
+      nodes.push({
+        spr,
+        base: spr.position.clone(),
+        seed: Math.random()*1000
+      });
+    }
+
+    // ====== Motion: camera look + subtle drift ======
+    let mx = 0, my = 0;
+    window.addEventListener("mousemove", (e)=>{
+      mx = (e.clientX / window.innerWidth - 0.5);
+      my = (e.clientY / window.innerHeight - 0.5);
+    });
+
     function easeInOutCubic(t){
       return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
     }
 
-    // позиція миші
-    let mx = 0, my = 0;
-    window.addEventListener('mousemove', (e)=>{
-      mx = (e.clientX / innerWidth  - 0.5);
-      my = (e.clientY / innerHeight - 0.5);
-    });
-
-    // респонс на resize (нічого важкого — тільки перерендер)
-    let W = innerWidth, H = innerHeight;
-    window.addEventListener('resize', ()=>{
-      W = innerWidth; H = innerHeight;
-    });
-
-    // === Генерація “хмари” дат навколо центру, але з вирізом safe-zone ===
-    const nodes = [];
-
-    function inSafeZone(x,y){
-      // еліпс у центрі
-      const nx = x / CFG.safeRX;
-      const ny = y / CFG.safeRY;
-      return (nx*nx + ny*ny) < 1;
-    }
-
-    function makeNode(i){
-      const el = document.createElement('div');
-      el.className = 'year';
-
-      const year = Math.floor(rand(CFG.minYear, CFG.maxYear+1));
-      el.textContent = year;
-
-      // розмір залежить від “глибини” (z): ближче — більші
-      // реальний розмір буде ще підкручуватись під час анімації
-      world.appendChild(el);
-
-      // Розкидуємо точки в “кільці” навколо центру, уникаючи safe-zone
-      let x,y,z;
-      let tries = 0;
-      do{
-        const a = rand(0, Math.PI*2);
-        const r = rand(CFG.radiusMin, CFG.radiusMax);
-        x = Math.cos(a)*r + rand(-180,180);
-        y = Math.sin(a)*r*0.62 + rand(-260,260);
-        z = rand(CFG.zMin, CFG.zMax);
-        tries++;
-        // якщо дуже застрягли — послабимо safe-zone
-        if(tries > 80) break;
-      }while(inSafeZone(x,y));
-
-      const baseOpacity = rand(0.16, 0.42);
-      const seed = rand(0, 1000);
-
-      const node = {
-        el,
-        // базова позиція
-        x0:x, y0:y, z0:z,
-        // поточна (анімаційна)
-        x:x, y:y, z:z,
-        // дрейф (без системного зсуву)
-        vx: rand(-1,1),
-        vy: rand(-1,1),
-        vz: rand(-1,1),
-        baseOpacity,
-        seed
-      };
-
-      nodes.push(node);
-      return node;
-    }
-
-    for(let i=0;i<CFG.count;i++) makeNode(i);
-
-    // === Стан “занурення” ===
     let flying = false;
     let flyStart = 0;
+    const FLY_MS = 1650;
 
-    // “камера” — transform на #world
-    let camZ = 0;      // вперед/назад
-    let camRX = 0;     // rotateX
-    let camRY = 0;     // rotateY
-    let camX = 0;      // translateX
-    let camY = 0;      // translateY
+    // “референсний” проліт: камера летить вперед, а поле пролітає повз
+    function animate(tms){
+      const t = tms * 0.001;
 
-    function renderNode(n, tNorm, flyingEase){
-      // tNorm — час у секундах (для синусів)
-      // flyingEase — 0..1 при зануренні
+      // камера “дивиться” за мишкою (важливо: це look, а не зсув обʼєктів)
+      const targetLook = new THREE.Vector3(
+        mx * 2.4,
+        -my * 1.6,
+        -16
+      );
 
-      // дрейф, але без “відльоту”:
-      // 1) додаємо легкий шум
-      // 2) пружиною тягнемо назад до x0/y0/z0
-      const wob = CFG.drift;
+      // плавність
+      camera.lookAt(
+        THREE.MathUtils.lerp(camera.getWorldDirection(new THREE.Vector3()).x, targetLook.x, 0.06),
+        THREE.MathUtils.lerp(camera.getWorldDirection(new THREE.Vector3()).y, targetLook.y, 0.06),
+        targetLook.z
+      );
 
-      const nx = Math.sin((tNorm*0.9) + n.seed) * wob;
-      const ny = Math.cos((tNorm*0.8) + n.seed*1.3) * wob;
-      const nz = Math.sin((tNorm*0.7) + n.seed*0.7) * (wob*0.55);
+      // легкий дрейф “поля” (але без відльоту)
+      for(const n of nodes){
+        const s = n.seed;
+        const wobx = Math.sin(t*0.9 + s) * 0.10;
+        const woby = Math.cos(t*0.8 + s*1.3) * 0.08;
+        const wobz = Math.sin(t*0.7 + s*0.7) * 0.10;
 
-      n.x += (nx + (n.x0 - n.x) * CFG.spring);
-      n.y += (ny + (n.y0 - n.y) * CFG.spring);
-      n.z += (nz + (n.z0 - n.z) * CFG.spring);
-
-      // “depth” для розміру/опациті
-      // map z: ближче (більше) -> крупніше/яскравіше
-      const z = n.z;
-      const depth = (z - CFG.zMin) / (CFG.zMax - CFG.zMin); // 0..1
-      const size = lerp(18, 56, depth);                     // px
-      const op = clamp(n.baseOpacity + depth*0.10, 0.08, 0.55);
-
-      // під час занурення: легкий blur + згасання
-      const blur = flyingEase * 14;
-      const op2  = op * (1 - flyingEase*1.15);
-
-      // додатковий “push” вперед при зануренні — імітує проліт крізь поле
-      const flyPush = flyingEase * 2400;
-
-      n.el.style.fontSize = `${size}px`;
-      n.el.style.opacity = `${Math.max(0, op2)}`;
-      n.el.style.filter = `blur(${blur}px)`;
-
-      // позиція в 3D відносно центру (left/top 50%)
-      n.el.style.transform = `translate3d(${n.x}px, ${n.y}px, ${n.z + flyPush}px)`;
-    }
-
-    function tick(ts){
-      const t = ts * 0.001;
-
-      // миша -> камера (паралакс + ротація)
-      // робимо інерцію, щоб було “плавно як на референсі”
-      const targetX  = mx * CFG.parallaxXY;
-      const targetY  = my * CFG.parallaxXY;
-      const targetRX = (-my) * CFG.rotX;
-      const targetRY = ( mx) * CFG.rotY;
-
-      camX  = lerp(camX,  targetX,  0.08);
-      camY  = lerp(camY,  targetY,  0.08);
-      camRX = lerp(camRX, targetRX, 0.07);
-      camRY = lerp(camRY, targetRY, 0.07);
-
-      let flyingEase = 0;
-
-      if(flying){
-        const dt = (ts - flyStart) / CFG.flyDuration;
-        const tt = clamp(dt, 0, 1);
-        flyingEase = easeInOutCubic(tt);
-
-        // камера летить ВПЕРЕД (по Z)
-        camZ = lerp(0, CFG.flyZ, flyingEase);
-
-        // у фіналі — редірект
-        if(tt >= 1){
-          location.href = './main.html#overview';
-          return;
-        }
-      } else {
-        camZ = lerp(camZ, 0, 0.06);
+        // пружина назад до base
+        n.spr.position.x += (n.base.x + wobx - n.spr.position.x) * 0.02;
+        n.spr.position.y += (n.base.y + woby - n.spr.position.y) * 0.02;
+        n.spr.position.z += (n.base.z + wobz - n.spr.position.z) * 0.02;
       }
 
-      // apply camera transform (важливо: translateZ йде останнім, щоб було “занурення”)
-      world.style.transform =
-        `translate3d(${camX}px, ${camY}px, ${-camZ}px) rotateX(${camRX}deg) rotateY(${camRY}deg)`;
+      if(flying){
+        const dt = (performance.now() - flyStart) / FLY_MS;
+        const tt = THREE.MathUtils.clamp(dt, 0, 1);
+        const e = easeInOutCubic(tt);
 
-      // рендеримо всі дати
-      for(const n of nodes) renderNode(n, t, flyingEase);
+        // камера реально летить вперед
+        camera.position.z = THREE.MathUtils.lerp(18, 4, e);
 
-      requestAnimationFrame(tick);
+        // і одночасно “пролітаємо” вглиб (зсув бази — виглядає як рух через поле)
+        for(const n of nodes){
+          n.base.z = n.base.z + (e * 0.9); // мікро, основне дає камера + перспектива
+          // додатковий “push” на спрайти
+          n.spr.position.z += e * 0.55;
+          n.spr.material.opacity = Math.max(0, n.spr.material.opacity - e*0.65);
+        }
+
+        if(tt > 0.72){
+          fade.style.opacity = String((tt - 0.72) / 0.28);
+        }
+
+        if(tt >= 1){
+          location.href = "./main.html#overview";
+          return;
+        }
+      }
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
     }
-    requestAnimationFrame(tick);
 
-    btn.addEventListener('click', ()=>{
+    requestAnimationFrame(animate);
+
+    btn.addEventListener("click", ()=>{
       if(flying) return;
       flying = true;
       flyStart = performance.now();
-      document.body.classList.add('flying');
-      fade.style.opacity = '1';
-      btn.style.pointerEvents = 'none';
+      document.body.classList.add("flying");
+      btn.disabled = true;
+    });
+
+    window.addEventListener("resize", ()=>{
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     });
   </script>
 </body>
