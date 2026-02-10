@@ -3,34 +3,84 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LMS | Main</title>
+  <title>LMS | Main Gallery</title>
 
   <style>
-    :root{ --bg0:#05070d; --bg1:#070a14; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&display=swap');
+
+    :root{
+      --bg0:#05070d;
+      --bg1:#070a14;
+      --text:#e8eefc;
+    }
+
     *{ box-sizing:border-box; }
     html,body{ height:100%; margin:0; }
     body{
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
       background:
         radial-gradient(1100px 700px at 65% 20%, rgba(30,90,200,.22), transparent 60%),
         radial-gradient(900px 600px at 25% 70%, rgba(80,200,160,.10), transparent 55%),
         linear-gradient(180deg, var(--bg1), var(--bg0));
       overflow:hidden;
     }
-    #gallery3d{ position:fixed; inset:0; }
+
+    #gallery3d{
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
     .vignette{
-      position:fixed; inset:0; pointer-events:none;
-      background: radial-gradient(1200px 700px at 50% 45%, rgba(0,0,0,0), rgba(0,0,0,.55) 70%, rgba(0,0,0,.82) 100%);
-      mix-blend-mode:multiply;
+      position: fixed; inset: 0;
+      pointer-events:none;
+      z-index: 2;
+      background:
+        radial-gradient(1200px 700px at 50% 45%, rgba(0,0,0,.0), rgba(0,0,0,.55) 70%, rgba(0,0,0,.78) 100%);
+      mix-blend-mode: multiply;
+    }
+
+    .badge{
+      position: fixed;
+      right: 18px;
+      top: 14px;
+      z-index: 3;
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(232,238,252,.06);
+      border: 1px solid rgba(232,238,252,.10);
+      color: rgba(232,238,252,.70);
+      pointer-events:none;
+      user-select:none;
+      backdrop-filter: blur(10px);
+    }
+
+    .hint{
+      position: fixed;
+      left: 18px;
+      bottom: 14px;
+      z-index: 3;
+      font-size: 12px;
+      color: rgba(232,238,252,.55);
+      pointer-events:none;
+      user-select:none;
     }
   </style>
 </head>
+
 <body>
-  <div id="gallery3d"></div>
-  <div class="vignette"></div>
+  <div id="gallery3d" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <div class="badge">WebGL • Three.js</div>
+  <div class="hint">Wheel → плавний рух • Drag up → 3-тя стрічка</div>
 
   <script type="module">
-    import { startMain } from "./libs/app-main.js";
-    startMain(document.getElementById("gallery3d"));
+    import { initMainGallery } from "./libs/main-gallery.js";
+    const mountEl = document.getElementById("gallery3d");
+    initMainGallery({ mountEl });
   </script>
 </body>
 </html>
