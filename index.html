@@ -1,263 +1,247 @@
 <!doctype html>
 <html lang="uk">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LMS — Intro</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LMS — Початок подорожі</title>
 
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
 
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:#05070d;color:#e8eefc;overflow:hidden}
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      color: #f3eed7;
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow: hidden;
+      cursor: default;
+    }
 
-  #intro{
-    position:fixed; inset:0;
-    background: radial-gradient(1200px 700px at 50% 45%, rgba(30,60,140,.35), rgba(7,10,22,.9) 60%, #05070d 100%);
-    overflow:hidden;
-  }
+    #container {
+      position: fixed;
+      inset: 0;
+      perspective: 1200px;
+      transform-style: preserve-3d;
+    }
 
-  #stage{
-    position:absolute; inset:0;
-    perspective:1400px;
-    transform-style:preserve-3d;
-  }
+    .year {
+      position: absolute;
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 500;
+      font-size: clamp(1.1rem, 3.5vw, 3.8rem);
+      letter-spacing: 0.04em;
+      color: rgba(243, 238, 215, 0.28);
+      text-shadow: 0 0 20px rgba(0,0,0,0.9);
+      pointer-events: none;
+      will-change: transform, opacity;
+      transform-style: preserve-3d;
+      white-space: nowrap;
+    }
 
-  #cloud{
-    position:absolute; inset:-30%;
-    transform-style:preserve-3d;
-  }
+    .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      z-index: 10;
+      padding: 5vw;
+      transition: opacity 1.4s ease, transform 1.4s cubic-bezier(0.2, 0.9, 0.1, 1);
+    }
 
-  #warp{
-    position:absolute; inset:-50%;
-    pointer-events:none;
-    opacity:0;
-    transition:opacity .4s ease;
-  }
-  .streak{
-    position:absolute;
-    width:2px;
-    height:clamp(90px, 20vh, 260px);
-    background:linear-gradient(to bottom, transparent, rgba(232,238,252,.45), transparent);
-    filter:blur(0.5px);
-    opacity:0;
-  }
+    h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(3.2rem, 9vw, 9rem);
+      font-weight: 500;
+      margin: 0 0 1.2rem;
+      letter-spacing: 0.02em;
+      line-height: 0.95;
+    }
 
-  .intro-content{
-    position:absolute; left:50%; top:50%;
-    transform:translate(-50%,-50%);
-    text-align:center;
-    width:min(920px,92vw);
-    z-index:10;
-    transition: all .8s cubic-bezier(.2,.9,.1,1);
-  }
+    .subtitle {
+      font-size: clamp(1.1rem, 2.2vw, 1.5rem);
+      max-width: 720px;
+      opacity: 0.85;
+      line-height: 1.55;
+      margin: 0 0 3rem;
+    }
 
-  h1{
-    font-family:"Cormorant Garamond", serif;
-    font-size:clamp(48px,7.5vw,92px);
-    font-weight:500;
-    letter-spacing:.02em;
-    margin:0 0 16px;
-    opacity:0;
-    transform:translateY(30px);
-    transition: all 1.2s ease;
-  }
-  .intro-content.visible h1{
-    opacity:1;
-    transform:translateY(0);
-  }
+    button {
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      padding: 1rem 3rem;
+      background: transparent;
+      color: #f3eed7;
+      border: 1px solid rgba(243, 238, 215, 0.35);
+      cursor: pointer;
+      transition: all 0.4s ease;
+    }
 
-  .timer{
-    font-family:Inter, monospace;
-    font-size:clamp(32px,4vw,52px);
-    font-weight:400;
-    letter-spacing:.15em;
-    color:#7dd3fc;
-    margin:20px 0 30px;
-    opacity:0.9;
-    text-shadow:0 0 30px rgba(125,211,252,.6);
-  }
+    button:hover {
+      border-color: #f3eed7;
+      background: rgba(243, 238, 215, 0.06);
+    }
 
-  p{
-    font-family:Inter, system-ui, sans-serif;
-    font-size:clamp(15px,1.6vw,17px);
-    opacity:.78;
-    line-height:1.65;
-    margin:0 0 32px;
-  }
+    .fade-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1.6s ease;
+      z-index: 20;
+    }
 
-  #enterBtn{
-    font-family:Inter, sans-serif;
-    letter-spacing:.25em;
-    text-transform:uppercase;
-    font-size:13.5px;
-    padding:16px 38px;
-    background:transparent;
-    color:#e8eefc;
-    border:1.5px solid rgba(232,238,252,.35);
-    transition:all .3s ease;
-  }
-  #enterBtn:hover{
-    background:rgba(232,238,252,.08);
-    border-color:#7dd3fc;
-    transform:translateY(-2px);
-  }
+    body.flying .content {
+      opacity: 0;
+      transform: translateY(-8%) scale(0.92);
+    }
 
-  .hint{
-    position:fixed; left:20px; bottom:18px;
-    font-size:12px; opacity:.5;
-    z-index:10;
-  }
-
-  .year{
-    position:absolute;
-    font-family:Inter, sans-serif;
-    color:rgba(232,238,252,.24);
-    font-size:15px;
-    text-shadow:0 8px 30px rgba(0,0,0,.6);
-    pointer-events:none;
-    transform-style:preserve-3d;
-  }
-
-  body.is-flying .intro-content{ opacity:0; transform:translate(-50%,-58%) scale(0.95); }
-  body.is-flying #warp{ opacity:1; }
-</style>
+    body.flying .fade-overlay {
+      opacity: 1;
+    }
+  </style>
 </head>
-
 <body>
-<div id="intro">
-  <div id="stage">
-    <div id="warp"></div>
-    <div id="cloud"></div>
-  </div>
 
-  <div class="intro-content" id="center">
+  <div id="container"></div>
+
+  <div class="content">
     <h1>Навчання — це подорож</h1>
-    <div class="timer" id="timer">01:30</div>
-    <p>У тебе є лише 90 секунд, щоб відчути атмосферу.<br>Час спливає.</p>
-    <button id="enterBtn">ПОЧАТИ ЗАРАЗ</button>
+    <p class="subtitle">
+      Через роки знань, помилок і відкриттів.<br>
+      Але час спливає. Почніть, поки не стало запізно.
+    </p>
+    <button id="startBtn">ПОЧАТИ</button>
   </div>
-</div>
 
-<div class="hint">ПОЧАТИ → проліт → main.html</div>
+  <div class="fade-overlay" id="fade"></div>
 
-<script>
-  // === Твій старий код з роками та streaks (скорочено для зручності) ===
-  const rand = (min, max) => min + Math.random()*(max-min);
-  const stage = document.getElementById('stage');
-  const cloud = document.getElementById('cloud');
-  const warp = document.getElementById('warp');
-  const enterBtn = document.getElementById('enterBtn');
-  const timerEl = document.getElementById('timer');
+  <script>
+    const container = document.getElementById('container');
+    const startBtn = document.getElementById('startBtn');
+    const fade = document.getElementById('fade');
 
-  // Створення років (70 штук) — той самий код, що був у тебе
-  const YEARS_COUNT = 70;
-  const years = [];
-  const now = new Date().getFullYear();
-  for (let i = 0; i < YEARS_COUNT; i++) {
-    const el = document.createElement('div');
-    el.className = 'year';
-    const y = Math.floor(rand(1800, now));
-    el.innerHTML = `<span>${y}</span>`;
-    cloud.appendChild(el);
+    const YEARS_COUNT = 120;
+    const years = [];
+    const now = new Date().getFullYear();
+    const minYear = 1800;
+    const maxYear = now + 20;
 
-    const r = rand(140, 520);
-    const a = rand(0, Math.PI*2);
-    const p = {
-      el, 
-      x: Math.cos(a)*r + rand(-140,140),
-      y: Math.sin(a)*r + rand(-90,90),
-      z: rand(-320, 260),
-      vx: rand(-0.08, 0.08),
-      vy: rand(-0.06, 0.06),
-      vz: rand(-0.05, 0.05),
-      s: rand(0.9, 1.4),
-      o: rand(0.16, 0.38)
-    };
-    years.push(p);
-    el.style.transform = `translate3d(${p.x}px,${p.y}px,${p.z}px) scale(${p.s})`;
-    el.style.opacity = p.o;
-  }
+    for (let i = 0; i < YEARS_COUNT; i++) {
+      const el = document.createElement('div');
+      el.className = 'year';
+      const year = Math.floor(Math.random() * (maxYear - minYear + 1)) + minYear;
+      el.textContent = year;
+      container.appendChild(el);
 
-  // Створення speed lines
-  for (let i = 0; i < 48; i++) {
-    const s = document.createElement('div');
-    s.className = 'streak';
-    s.style.left = rand(0,100) + '%';
-    s.style.top = rand(-50,120) + '%';
-    s.style.transform = `rotate(${rand(-12,12)}deg)`;
-    warp.appendChild(s);
-  }
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 300 + Math.random() * 800;
+      const x = Math.cos(angle) * radius;
+      const y = (Math.random() - 0.5) * 600;
+      const z = (Math.random() - 0.5) * 1000 - 400;
 
-  // Mouse parallax
-  let mx = 0, my = 0;
-  window.addEventListener('mousemove', e => {
-    mx = (e.clientX / window.innerWidth - 0.5) * 45;
-    my = (e.clientY / window.innerHeight - 0.5) * 32;
-  });
+      const data = {
+        el,
+        baseX: x,
+        baseY: y,
+        baseZ: z,
+        x, y, z,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.3,
+        vz: (Math.random() - 0.5) * 0.25,
+        scale: 0.8 + Math.random() * 0.6,
+        opacity: 0.12 + Math.random() * 0.22
+      };
 
-  // === ТАЙМЕР 90 секунд ===
-  let timeLeft = 90;
-  let timerInterval;
+      years.push(data);
+      el.style.opacity = data.opacity;
+      updateYearTransform(data);
+    }
 
-  function startTimer() {
-    timerInterval = setInterval(() => {
-      timeLeft--;
-      const min = String(Math.floor(timeLeft / 60)).padStart(2, '0');
-      const sec = String(timeLeft % 60).padStart(2, '0');
-      timerEl.textContent = `${min}:${sec}`;
+    function updateYearTransform(d) {
+      d.el.style.transform = `
+        translate3d(${d.x}px, ${d.y}px, ${d.z}px)
+        scale(${d.scale})
+      `;
+    }
 
-      if (timeLeft <= 15) timerEl.style.color = '#f87171';
+    let flying = false;
+    let flightStart = 0;
 
-      if (timeLeft <= 0) {
-        clearInterval(timerInterval);
-        startFlight();
+    function animate() {
+      if (!flying) {
+        // Повільний дрейф
+        years.forEach(d => {
+          d.x += d.vx;
+          d.y += d.vy;
+          d.z += d.vz;
+
+          // Легке повернення до центру (щоб не розліталися надто далеко)
+          d.x += (d.baseX - d.x) * 0.0008;
+          d.y += (d.baseY - d.y) * 0.0008;
+          d.z += (d.baseZ - d.z) * 0.0008;
+
+          updateYearTransform(d);
+        });
+      } else {
+        // Політ у камеру
+        const t = (performance.now() - flightStart) / 1600; // ~1.6s тривалість
+        if (t > 1) {
+          window.location.href = './main.html#overview';
+          return;
+        }
+
+        const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        const pushZ = ease * 2200; // сильний рух вперед
+
+        years.forEach(d => {
+          d.x += (0 - d.x) * ease * 0.8; // до центру по X/Y
+          d.y += (0 - d.y) * ease * 0.8;
+          d.z += pushZ + d.vz * 30;     // основний поштовх вперед
+
+          d.scale += ease * 2.5;        // збільшення розміру
+          d.opacity = Math.max(0, d.opacity - ease * 0.6);
+
+          updateYearTransform(d);
+        });
+
+        // Легкий mouse parallax під час польоту (опціонально)
+        // const mx = (mouseX - 0.5) * 60 * (1 - ease);
+        // const my = (mouseY - 0.5) * 40 * (1 - ease);
+        // container.style.transform = `translate3d(${mx}px, ${my}px, 0)`;
       }
-    }, 1000);
-  }
 
-  // Анімація появи тексту
-  setTimeout(() => {
-    document.getElementById('center').classList.add('visible');
-  }, 400);
+      requestAnimationFrame(animate);
+    }
 
-  // Запуск таймеру
-  startTimer();
+    requestAnimationFrame(animate);
 
-  // Клік на кнопку
-  enterBtn.addEventListener('click', () => {
-    clearInterval(timerInterval);
-    startFlight();
-  });
-
-  function startFlight() {
-    document.body.classList.add('is-flying');
-    
-    // Прискорюємо рух років і warp
-    setTimeout(() => {
-      window.location.href = './main.html#overview';
-    }, 1100);
-  }
-
-  // Основний loop (трохи покращений)
-  function tick() {
-    const camX = mx;
-    const camY = my;
-
-    cloud.style.transform = `translate3d(${camX}px,${camY}px,0) rotateX(${-my*7}deg) rotateY(${mx*9}deg)`;
-
-    years.forEach(p => {
-      p.x += p.vx * 1.02;
-      p.y += p.vy * 1.02;
-      p.z += p.vz * 1.02;
-
-      p.el.style.transform = `translate3d(${p.x}px,${p.y}px,${p.z}px) scale(${p.s})`;
+    // Mouse parallax на вступі (дуже легкий, щоб не відволікати)
+    let mouseX = 0.5, mouseY = 0.5;
+    window.addEventListener('mousemove', e => {
+      if (flying) return;
+      mouseX = e.clientX / window.innerWidth;
+      mouseY = e.clientY / window.innerHeight;
+      const px = (mouseX - 0.5) * 40;
+      const py = (mouseY - 0.5) * 30;
+      container.style.transform = `translate3d(${px}px, ${py}px, 0) rotateX(${(mouseY-0.5)*-4}deg) rotateY(${(mouseX-0.5)*6}deg)`;
     });
 
-    requestAnimationFrame(tick);
-  }
-
-  requestAnimationFrame(tick);
-</script>
+    startBtn.addEventListener('click', () => {
+      if (flying) return;
+      flying = true;
+      flightStart = performance.now();
+      document.body.classList.add('flying');
+      fade.style.transition = 'opacity 1.8s ease';
+      setTimeout(() => fade.style.opacity = 1, 400);
+    });
+  </script>
 </body>
 </html>
