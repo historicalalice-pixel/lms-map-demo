@@ -3,266 +3,164 @@ import * as THREE from "./three.module.js";
 import { GALLERY_ITEMS } from "./data.js";
 
 export function initMainGallery({ mountEl }) {
-  // ---------- Renderer ----------
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true, // transparent over your CSS background
-    powerPreference: "high-performance",
-  });
-
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
-  renderer.setSize(mountEl.clientWidth, mountEl.clientHeight, false);
-  renderer.setClearAlpha(0);
-  mountEl.innerHTML = "";
+  // ---------- renderer ----------
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.35; // ВАЖЛИВО: підняли експозицію, щоб картки були видимі
   mountEl.appendChild(renderer.domElement);
 
-  // ---------- Scene / Camera ----------
+  // ---------- scene/camera ----------
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(
     55,
     mountEl.clientWidth / mountEl.clientHeight,
     0.1,
-    200
+    4000
   );
-  camera.position.set(0, 0.2, 0); // inside the "sphere/cylinder" feeling
-  scene.add(camera);
+  camera.position.set(0, 0, 120);       // трохи вперед
+  camera.lookAt(0, 0, -600);
 
-  // Lights (subtle)
-  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-  dir.position.set(3, 6, 4);
-  scene.add(dir);
+  // ---------- light (робимо “видимо”, не темно) ----------
+  const amb = new THREE.AmbientLight(0xffffff, 1.15);
+  scene.add(amb);
 
-  // ---------- Parameters ----------
-  const R = 16.5;              // radius of the belts (bigger -> further)
-  const CARD_W = 3.6;          // card width
-  const CARD_H = 2.2;          // card height
-  const COUNT_PER_BELT = 42;   // more cards = denser + feels infinite
-  const GAP = 0.55;            // angle gap "feel" (handled by count + radius)
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(2, 3, 2);
+  scene.add(key);
 
-  // 2 visible belts + 1 hidden top belt
-  const BELTS = [
-    { y: -3.2, baseSpeed: 0.0024, visible: true,  hidden: false }, // lower
-    { y:  0.0, baseSpeed: 0.0018, visible: true,  hidden: false }, // middle
-    { y:  6.4, baseSpeed: 0.0016, visible: false, hidden: true  }, // top hidden
-  ];
+  const fill = new THREE.DirectionalLight(0xbcd7ff, 0.65);
+  fill.position.set(-2, -1, 1);
+  scene.add(fill);
 
-  // ---------- Texture helper ----------
-  function makeCardTexture({ title, subtitle }, accent = "#94a3b8") {
-    const W = 512;
-    const H = 320;
-    const c = document.createElement("canvas");
-    c.width = W;
-    c.height = H;
-    const ctx = c.getContext("2d");
-
-    // background
-    ctx.fillStyle = "rgba(10,12,20,0.75)";
-    ctx.fillRect(0, 0, W, H);
-
-    // subtle border
-    ctx.strokeStyle = "rgba(232,238,252,0.14)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, W - 20, H - 20);
-
-    // accent bar
-    ctx.fillStyle = accent;
-    ctx.globalAlpha = 0.25;
-    ctx.fillRect(10, 10, 8, H - 20);
-    ctx.globalAlpha = 1;
-
-    // text
-    ctx.fillStyle = "rgba(232,238,252,0.92)";
-    ctx.font = "600 34px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    ctx.fillText(title || "Картка", 38, 110);
-
-    ctx.fillStyle = "rgba(232,238,252,0.62)";
-    ctx.font = "400 22px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    ctx.fillText(subtitle || "Модуль / Епізод", 38, 150);
-
-    // tiny footer
-    ctx.fillStyle = "rgba(232,238,252,0.35)";
-    ctx.font = "400 16px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    ctx.fillText("LMS • Gallery", 38, H - 48);
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy?.() || 1, 8);
-    tex.needsUpdate = true;
-    return tex;
-  }
-
-  // ---------- Build belts ----------
-  const belts = [];
-  const materialCache = new Map();
-
-  function getMat(item, i) {
-    const key = `${item.id}-${i}`;
-    if (materialCache.has(key)) return materialCache.get(key);
-
-    const palette = ["#60a5fa", "#34d399", "#a78bfa", "#fbbf24", "#fb7185"];
-    const tex = makeCardTexture(item, palette[i % palette.length]);
-
-    const mat = new THREE.MeshStandardMaterial({
-      map: tex,
-      roughness: 0.85,
-      metalness: 0.05,
-      transparent: true,
-      opacity: 0.9,
-    });
-
-    materialCache.set(key, mat);
-    return mat;
-  }
-
-  function buildBelt(beltIndex, cfg) {
-    const group = new THREE.Group();
-    group.position.y = cfg.y;
-
-    const cards = [];
-    for (let i = 0; i < COUNT_PER_BELT; i++) {
-      const item = GALLERY_ITEMS[i % GALLERY_ITEMS.length];
-      const geo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
-      const mesh = new THREE.Mesh(geo, getMat(item, i));
-      mesh.userData = { item, i };
-      group.add(mesh);
-      cards.push(mesh);
-    }
-
-    scene.add(group);
-
-    return {
-      group,
-      cards,
-      offset: 0,        // angular offset
-      vel: 0,           // angular velocity
-      targetVel: 0,
-      baseSpeed: cfg.baseSpeed,
-      hidden: cfg.hidden,
-      reveal: cfg.hidden ? 0 : 1, // 0..1 for top belt
-    };
-  }
-
-  BELTS.forEach((cfg, idx) => {
-    belts.push(buildBelt(idx, cfg));
+  // ---------- subtle background “mist” planes ----------
+  // (щоб не було відчуття порожнечі, але без туману який вбиває картки)
+  const bgGeom = new THREE.PlaneGeometry(4000, 2400);
+  const bgMat = new THREE.MeshBasicMaterial({
+    color: 0x05070d,
+    transparent: true,
+    opacity: 0.30,
+    depthWrite: false,
   });
+  const bg = new THREE.Mesh(bgGeom, bgMat);
+  bg.position.set(0, 0, -1400);
+  scene.add(bg);
 
-  // ---------- Interaction ----------
-  let isDown = false;
+  // ---------- groups (3 bands) ----------
+  const root = new THREE.Group();
+  scene.add(root);
+
+  const bands = [
+    makeBand({ y: 120,  phase: 0.00, visible: 1.0 }),  // верхня (видима)
+    makeBand({ y: -120, phase: 0.33, visible: 1.0 }),  // нижня (видима)
+    makeBand({ y: 340,  phase: 0.66, visible: 0.0 }),  // третя зверху (спочатку прихована)
+  ];
+  bands.forEach(b => root.add(b.group));
+
+  // ---------- controls / motion ----------
+  let yaw = 0;              // “прокрутка” вздовж кільця
+  let yawVel = 0;           // інерція
+  let drag = false;
   let lastX = 0;
   let lastY = 0;
 
-  // overall “lift” controls hidden belt reveal
-  let lift = 0;        // current
-  let liftTarget = 0;  // target
-  // scroll/drag adds speed impulse
-  let impulse = 0;
+  // повільніший wheel (це саме те, що просив)
+  const WHEEL_SENS = 0.00045;    // менше => повільніше
+  const DRAG_SENS  = 0.0040;     // “перетяг”
+  const DAMP       = 0.90;       // інерція / затухання
 
-  function onPointerDown(e) {
-    isDown = true;
+  // третя смуга: “витягування” вгору (0..1)
+  let reveal = 0;
+  let revealTarget = 0;
+
+  // mouse parallax (трохи “всередині сфери” відчуття)
+  let mx = 0, my = 0;
+  let mxT = 0, myT = 0;
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    // Chrome дає deltaY ~ 100..120 за “тик”
+    yawVel += e.deltaY * WHEEL_SENS;
+
+    // якщо тягнемо скролом/жестом вгору — трошки відкриваємо 3-тю смугу
+    if (e.deltaY < 0) revealTarget = Math.min(1, revealTarget + 0.10);
+    if (e.deltaY > 0) revealTarget = Math.max(0, revealTarget - 0.06);
+  };
+
+  const onPointerDown = (e) => {
+    drag = true;
     lastX = e.clientX;
     lastY = e.clientY;
-  }
-  function onPointerMove(e) {
-    if (!isDown) return;
+    mountEl.setPointerCapture?.(e.pointerId);
+  };
+
+  const onPointerMove = (e) => {
+    const w = Math.max(1, mountEl.clientWidth);
+    const h = Math.max(1, mountEl.clientHeight);
+
+    // parallax target
+    mxT = (e.clientX / w) * 2 - 1;
+    myT = (e.clientY / h) * 2 - 1;
+
+    if (!drag) return;
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
     lastX = e.clientX;
     lastY = e.clientY;
 
-    // horizontal drag => rotate belts
-    impulse += dx * 0.0006;
+    yawVel += -dx * DRAG_SENS * 0.35;
 
-    // drag up => reveal hidden belt
-    liftTarget = THREE.MathUtils.clamp(liftTarget + (-dy) * 0.003, 0, 1);
-  }
-  function onPointerUp() {
-    isDown = false;
-  }
+    // потягнув вгору => відкриваємо 3-тю смугу
+    if (dy < -3) revealTarget = Math.min(1, revealTarget + 0.03);
+    if (dy >  3) revealTarget = Math.max(0, revealTarget - 0.02);
+  };
 
-  // wheel => rotate belts (gentle)
-  function onWheel(e) {
-    // normalize wheel feel
-    const d = THREE.MathUtils.clamp(e.deltaY, -120, 120);
-    impulse += d * 0.00035;
+  const onPointerUp = (e) => {
+    drag = false;
+    mountEl.releasePointerCapture?.(e.pointerId);
+  };
 
-    // also allow “up” wheel to slightly reveal
-    if (d < 0) liftTarget = THREE.MathUtils.clamp(liftTarget + 0.06, 0, 1);
-    if (d > 0) liftTarget = THREE.MathUtils.clamp(liftTarget - 0.04, 0, 1);
-  }
+  mountEl.addEventListener("wheel", onWheel, { passive: false });
+  mountEl.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
 
-  window.addEventListener("pointerdown", onPointerDown, { passive: true });
-  window.addEventListener("pointermove", onPointerMove, { passive: true });
-  window.addEventListener("pointerup", onPointerUp, { passive: true });
-  window.addEventListener("wheel", onWheel, { passive: true });
+  // ---------- animate ----------
+  const clock = new THREE.Clock();
 
-  // ---------- Layout update ----------
-  function layoutBelt(belt, y, revealAlpha = 1) {
-    const N = belt.cards.length;
-    // more “infinite” feel: slight spacing variation via radius + count
-    for (let i = 0; i < N; i++) {
-      const a = (i / N) * Math.PI * 2 + belt.offset;
+  function tick() {
+    const dt = Math.min(0.033, clock.getDelta());
 
-      const x = Math.cos(a) * R;
-      const z = Math.sin(a) * R;
+    // smooth mouse parallax
+    mx += (mxT - mx) * (1 - Math.pow(0.001, dt));
+    my += (myT - my) * (1 - Math.pow(0.001, dt));
 
-      const m = belt.cards[i];
-      m.position.set(x, 0, z);
+    // apply inertia
+    yaw += yawVel;
+    yawVel *= Math.pow(DAMP, dt * 60);
 
-      // face inward (camera at center)
-      m.lookAt(0, 0, 0);
+    // smooth reveal
+    reveal += (revealTarget - reveal) * (1 - Math.pow(0.001, dt));
 
-      // subtle tilt so it feels like a ribbon
-      m.rotation.y += Math.sin(a) * 0.12;
+    // subtle camera “inside sphere” feel
+    camera.position.x = mx * 14;
+    camera.position.y = -my * 10;
+    camera.lookAt(0, 0, -650);
 
-      // opacity for hidden belt reveal
-      m.material.opacity = 0.88 * revealAlpha;
-    }
+    // update bands
+    // невеликий автодрейф як у 100lostspecies (ледь-ледь)
+    const auto = dt * 0.08;
+    bands[0].setProgress(yaw * 0.85 + auto);
+    bands[1].setProgress(yaw * 0.85 + 1.5 * auto);
+    bands[2].setProgress(yaw * 0.85 + 2.0 * auto);
 
-    belt.group.position.y = y;
-  }
-
-  // ---------- Animation loop ----------
-  let lastT = performance.now();
-
-  function tick(t) {
-    const dt = Math.min((t - lastT) / 16.6667, 2.0);
-    lastT = t;
-
-    // smooth lift (reveal)
-    lift += (liftTarget - lift) * (0.08 * dt);
-
-    // decay impulse smoothly
-    impulse *= Math.pow(0.92, dt);
-
-    // camera micro motion (very subtle, like inside a sphere)
-    const camX = Math.sin(t * 0.00025) * 0.25;
-    const camY = Math.cos(t * 0.00020) * 0.18;
-    camera.position.x = camX;
-    camera.position.y = 0.2 + camY;
-
-    // belts update
-    belts.forEach((belt, idx) => {
-      // target velocity = base + impulse (different multiplier per belt)
-      belt.targetVel = belt.baseSpeed + impulse * (idx === 1 ? 1.0 : 0.8);
-
-      // smooth velocity
-      belt.vel += (belt.targetVel - belt.vel) * (0.10 * dt);
-      belt.offset += belt.vel * dt;
-
-      // reveal top belt: move it down into view + fade in
-      if (belt.hidden) {
-        const yHidden = 6.4;
-        const yShown = 3.0;
-        const y = THREE.MathUtils.lerp(yHidden, yShown, lift);
-        belt.reveal = lift;
-
-        layoutBelt(belt, y, THREE.MathUtils.smoothstep(lift, 0, 1));
-      } else {
-        layoutBelt(belt, BELTS[idx].y, 1);
-      }
-    });
+    // третя смуга “вилазить зверху”
+    const topBaseY = 340;
+    bands[2].group.position.y = topBaseY - reveal * 260;      // опускаємо в зону видимості
+    bands[2].setVisibility(reveal);
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
@@ -270,23 +168,143 @@ export function initMainGallery({ mountEl }) {
 
   requestAnimationFrame(tick);
 
-  // ---------- Resize ----------
+  // ---------- resize ----------
   function onResize() {
     const w = mountEl.clientWidth;
     const h = mountEl.clientHeight;
-    renderer.setSize(w, h, false);
+    renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
   window.addEventListener("resize", onResize);
 
-  // expose cleanup (optional)
-  return () => {
-    window.removeEventListener("resize", onResize);
-    window.removeEventListener("pointerdown", onPointerDown);
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", onPointerUp);
-    window.removeEventListener("wheel", onWheel);
-    renderer.dispose();
-  };
+  // ---------- helpers ----------
+  function makeBand({ y, phase, visible }) {
+    const group = new THREE.Group();
+    group.position.y = y;
+
+    // МЕНШИЙ радіус => ближче/більше картки (було “далеко і малі”)
+    const R = 520;
+
+    const items = (Array.isArray(GALLERY_ITEMS) && GALLERY_ITEMS.length)
+      ? GALLERY_ITEMS
+      : Array.from({ length: 30 }, (_, i) => ({ title: `Картка ${i+1}` }));
+
+    const perBand = Math.max(18, Math.min(40, items.length));
+    const slice = [];
+    for (let i = 0; i < perBand; i++) {
+      slice.push(items[(i + Math.floor(phase * items.length)) % items.length]);
+    }
+
+    const cards = [];
+    const cardW = 210;   // більші
+    const cardH = 140;
+
+    // матеріал: НЕ прозорий + трохи емісії => видно завжди
+    function cardMaterial(hex) {
+      return new THREE.MeshStandardMaterial({
+        color: hex,
+        roughness: 0.55,
+        metalness: 0.05,
+        emissive: new THREE.Color(hex).multiplyScalar(0.12),
+        emissiveIntensity: 1.0,
+        transparent: false,
+      });
+    }
+
+    const palette = [
+      0x6b84ff, 0x56d6a8, 0xffb86b, 0xc084fc,
+      0x94a3b8, 0x60a5fa, 0x34d399, 0xfca5a5,
+    ];
+
+    for (let i = 0; i < slice.length; i++) {
+      const geom = new THREE.PlaneGeometry(cardW, cardH, 1, 1);
+      const mat = cardMaterial(palette[i % palette.length]);
+      const mesh = new THREE.Mesh(geom, mat);
+
+      // slight rounded illusion via scale + softness (без текстур)
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+
+      // ставимо на “внутрішню” сторону циліндра (ми ніби всередині)
+      // Тобто plane дивиться в центр.
+      const a = (i / slice.length) * Math.PI * 2;
+      const x = Math.sin(a) * R;
+      const z = -Math.cos(a) * R - 760;   // відсуваємо всю стрічку назад, щоб камера “дивилась” в неї
+      mesh.position.set(x, 0, z);
+
+      // повертаємо до центру/камери
+      mesh.lookAt(0, 0, -760);
+
+      // трошки “вигин” ефект: додатковий нахил назовні/всередину
+      mesh.rotation.y += 0.25 * Math.sin(a);
+
+      // зробимо стрічку більш “щільною” по вертикалі
+      mesh.position.y = (Math.sin(a * 2.0) * 10);
+
+      group.add(mesh);
+      cards.push({ mesh, a0: a });
+    }
+
+    // легкий “glass” рефлекс поверх (щоб не було пласких прямокутників)
+    const gloss = new THREE.Mesh(
+      new THREE.PlaneGeometry(cardW, cardH),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.08,
+        depthWrite: false,
+      })
+    );
+    // (клонуємо gloss під кожну картку)
+    for (let i = 0; i < cards.length; i++) {
+      const g = gloss.clone();
+      g.position.copy(cards[i].mesh.position);
+      g.rotation.copy(cards[i].mesh.rotation);
+      g.scale.set(0.98, 0.98, 1);
+      group.add(g);
+    }
+
+    // visibility
+    group.traverse(obj => {
+      if (obj.material && obj.material.transparent) obj.material.opacity *= visible;
+    });
+    group.visible = true;
+
+    function setProgress(p) {
+      // p рухає “стрічку” по колу
+      for (let i = 0; i < cards.length; i++) {
+        const a = cards[i].a0 + p;
+        const x = Math.sin(a) * R;
+        const z = -Math.cos(a) * R - 760;
+
+        cards[i].mesh.position.x = x;
+        cards[i].mesh.position.z = z;
+        cards[i].mesh.lookAt(0, 0, -760);
+        cards[i].mesh.rotation.y += 0.25 * Math.sin(a);
+
+        // Динамічна яскравість: ближче до центру => трохи світліше
+        const near = (1 + Math.cos(a)) * 0.5; // 0..1
+        const boost = 0.85 + near * 0.25;
+        cards[i].mesh.material.emissiveIntensity = boost;
+      }
+    }
+
+    function setVisibility(v) {
+      // v: 0..1
+      group.traverse(obj => {
+        if (obj.material && obj.material.transparent) {
+          obj.material.opacity = 0.08 * v;
+        }
+      });
+      // для стандартних матеріалів зробимо “появу” через scale
+      group.scale.setScalar(0.92 + v * 0.08);
+    }
+
+    // ініт
+    setProgress(phase * Math.PI * 2);
+    setVisibility(visible);
+
+    return { group, setProgress, setVisibility };
+  }
 }
