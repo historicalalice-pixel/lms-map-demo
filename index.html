@@ -3,46 +3,46 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LMS — Початок подорожі</title>
+  <title>LMS — Початок</title>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
 
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0; height: 100%; overflow: hidden;
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body {
+      height: 100vh;
       background: #000;
       color: #f3eed7;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      cursor: default;
     }
 
     #scene {
       position: fixed;
       inset: 0;
-      perspective: 1800px;          /* глибша перспектива */
+      perspective: 2200px;               /* глибше для сильного ефекту */
       transform-style: preserve-3d;
-      background: radial-gradient(circle at 50% 50%, #111 0%, #000 70%);
+      background: radial-gradient(circle at 50% 40%, #0a0a0a 0%, #000 75%);
+      will-change: transform;
     }
 
     .year {
       position: absolute;
       left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
       font-family: 'Cormorant Garamond', serif;
       font-weight: 500;
-      font-size: clamp(1.4rem, 4.2vw, 5rem);   /* більші дати */
-      letter-spacing: 0.05em;
-      color: rgba(243, 238, 215, 0.45);        /* чіткіша */
-      text-shadow: 
-        0 0 12px rgba(243,238,215,0.4),
-        0 0 30px rgba(0,0,0,0.8);
+      font-size: clamp(1.8rem, 5vw, 6.5rem);
+      letter-spacing: 0.06em;
+      color: rgba(243, 238, 215, 0.55);   /* чітко видно */
+      text-shadow: 0 0 18px rgba(243,238,215,0.45), 0 0 40px rgba(0,0,0,0.9);
       pointer-events: none;
       will-change: transform, opacity, filter;
-      transform-style: preserve-3d;
-      white-space: nowrap;
-      transform: translate(-50%, -50%);
+      backface-visibility: hidden;
     }
 
-    .content {
+    .intro {
       position: absolute;
       inset: 0;
       display: flex;
@@ -51,61 +51,60 @@
       justify-content: center;
       text-align: center;
       z-index: 10;
-      padding: 4vw;
-      transition: opacity 1.8s ease, transform 1.8s cubic-bezier(0.16, 1, 0.3, 1);
+      padding: 5vw;
+      transition: opacity 1.2s ease-out, transform 1.6s cubic-bezier(0.16,1,0.3,1);
     }
 
     h1 {
-      font-size: clamp(3.8rem, 10vw, 11rem);
+      font-size: clamp(4.5rem, 12vw, 14rem);
       font-weight: 500;
-      margin: 0 0 1.4rem;
-      letter-spacing: 0.02em;
-      line-height: 0.92;
-      text-shadow: 0 10px 40px rgba(0,0,0,0.7);
+      margin: 0 0 1.5rem;
+      line-height: 0.9;
+      text-shadow: 0 15px 60px rgba(0,0,0,0.8);
     }
 
     .subtitle {
-      font-size: clamp(1.2rem, 2.4vw, 1.8rem);
-      max-width: 780px;
-      opacity: 0.88;
+      font-size: clamp(1.3rem, 2.8vw, 2rem);
+      max-width: 800px;
+      opacity: 0.92;
       line-height: 1.6;
-      margin: 0 0 3.5rem;
+      margin: 0 0 4rem;
     }
 
     button {
-      font-size: 1.1rem;
-      letter-spacing: 0.3em;
+      font-size: 1.15rem;
+      letter-spacing: 0.35em;
       text-transform: uppercase;
-      padding: 1.2rem 3.5rem;
+      padding: 1.3rem 4rem;
       background: transparent;
       color: #f3eed7;
-      border: 1.5px solid rgba(243,238,215,0.45);
+      border: 2px solid rgba(243,238,215,0.5);
       cursor: pointer;
-      transition: all 0.45s ease;
+      transition: all 0.5s ease;
     }
 
     button:hover {
       border-color: #f3eed7;
-      background: rgba(243,238,215,0.08);
-      transform: translateY(-3px);
+      background: rgba(243,238,215,0.1);
+      transform: translateY(-4px) scale(1.03);
     }
 
-    .fade-overlay {
+    #fade {
       position: fixed;
       inset: 0;
       background: #000;
       opacity: 0;
-      transition: opacity 1.9s ease;
-      z-index: 20;
+      transition: opacity 1.4s ease-in;
+      z-index: 30;
       pointer-events: none;
     }
 
-    body.flying .content {
+    body.flying .intro {
       opacity: 0;
-      transform: translateY(-12%) scale(0.88);
+      transform: translateY(-15%) scale(0.85);
     }
 
-    body.flying .fade-overlay {
+    body.flying #fade {
       opacity: 1;
     }
   </style>
@@ -114,127 +113,97 @@
 
   <div id="scene"></div>
 
-  <div class="content">
+  <div class="intro">
     <h1>Навчання — це подорож</h1>
-    <p class="subtitle">
-      Крізь століття знань, відкриттів і втрат.<br>
-      Час летить швидко. Почніть прямо зараз.
-    </p>
-    <button id="start">ПОЧАТИ</button>
+    <p class="subtitle">Через століття знань і відкриттів.<br>Час невблаганний. Почніть, поки є можливість.</p>
+    <button id="go">ПОЧАТИ</button>
   </div>
 
-  <div class="fade-overlay" id="fade"></div>
+  <div id="fade"></div>
 
   <script>
     const scene = document.getElementById('scene');
-    const startBtn = document.getElementById('start');
+    const goBtn = document.getElementById('go');
     const fade = document.getElementById('fade');
 
-    const YEARS = 140;
+    const COUNT = 160;
     const years = [];
     const now = new Date().getFullYear();
-    const minY = 1700;
-    const maxY = now + 30;
 
-    for (let i = 0; i < YEARS; i++) {
+    for (let i = 0; i < COUNT; i++) {
       const el = document.createElement('div');
       el.className = 'year';
-      const y = Math.floor(Math.random() * (maxY - minY + 1)) + minY;
-      el.textContent = y;
+      const year = 1700 + Math.floor(Math.random() * (now + 50 - 1700));
+      el.textContent = year;
       scene.appendChild(el);
-
-      const rx = (Math.random() - 0.5) * 2;
-      const ry = (Math.random() - 0.5) * 2;
-      const rz = Math.random() * Math.PI * 2;
 
       const data = {
         el,
-        x: (Math.random() - 0.5) * 1600,
-        y: (Math.random() - 0.5) * 1200,
-        z: (Math.random() - 0.5) * 1800 - 600,
-        rx, ry, rz,
-        vx: (Math.random() - 0.5) * 1.2,   // помітніший дрейф
-        vy: (Math.random() - 0.5) * 1.0,
-        vz: (Math.random() - 0.5) * 0.8,
-        baseOpacity: 0.28 + Math.random() * 0.32   // чіткіші дати
+        x: (Math.random() - 0.5) * 2200,
+        y: (Math.random() - 0.5) * 1600,
+        z: (Math.random() - 0.5) * 3000 - 800,
+        vx: (Math.random() - 0.5) * 2.2,
+        vy: (Math.random() - 0.5) * 1.8,
+        vz: (Math.random() - 0.5) * 1.4,
+        opacity: 0.38 + Math.random() * 0.42
       };
       years.push(data);
-      updateTransform(data);
+      el.style.opacity = data.opacity;
+      el.style.transform = `translate3d(${data.x}px,${data.y}px,${data.z}px)`;
     }
 
-    function updateTransform(d) {
-      d.el.style.transform = `
-        translate3d(${d.x}px, ${d.y}px, ${d.z}px)
-        rotateX(${d.rx}rad) rotateY(${d.ry}rad) rotateZ(${d.rz}rad)
-      `;
-      d.el.style.opacity = d.baseOpacity;
-    }
+    let isFlying = false;
+    let flyStart = 0;
 
-    let flying = false;
-    let startTime = 0;
-    let mouse = { x: 0.5, y: 0.5 };
-
-    window.addEventListener('mousemove', e => {
-      if (flying) return;
-      mouse.x = e.clientX / window.innerWidth;
-      mouse.y = e.clientY / window.innerHeight;
-    });
-
-    function loop(ts) {
-      if (!flying) {
-        // Дрейф + легкий parallax
+    function raf(ts) {
+      if (!isFlying) {
+        // Дрейфування — помітніше
         years.forEach(d => {
-          d.x += d.vx * 0.8;
-          d.y += d.vy * 0.8;
-          d.z += d.vz * 0.6;
-
-          // Повільне коливання
-          d.rx += 0.0003 * Math.sin(ts * 0.0004 + d.x);
-          d.ry += 0.0002 * Math.cos(ts * 0.0005 + d.y);
-
-          updateTransform(d);
+          d.x += d.vx;
+          d.y += d.vy;
+          d.z += d.vz;
+          d.el.style.transform = `translate3d(${d.x}px,${d.y}px,${d.z}px)`;
         });
-
-        const px = (mouse.x - 0.5) * 80;
-        const py = (mouse.y - 0.5) * 60;
-        scene.style.transform = `translate3d(${px}px, ${py}px, -200px) rotateX(${(mouse.y-0.5)*-6}deg) rotateY(${(mouse.x-0.5)*9}deg)`;
       } else {
-        const elapsed = ts - startTime;
-        const t = Math.min(elapsed / 1800, 1);   // 1.8 секунди польоту
-        const e = t < 0.4 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
+        const elapsed = ts - flyStart;
+        const t = Math.min(elapsed / 1400, 1);  // 1.4 секунди — швидко і драматично
+        const e = t < 0.3 ? 8 * t**3 : 1 - (-2*t + 2)**3 / 2;  // різкий старт, плавне уповільнення
 
         years.forEach(d => {
-          // Зліт до центру + вперед
-          d.x += (0 - d.x) * e * 1.8;
-          d.y += (0 - d.y) * e * 1.8;
-          d.z += 2200 * e + d.vz * 60;   // сильний поштовх вперед
+          // Швидке зібрання до центру + політ уперед
+          const pull = e * 3.5;
+          d.x += (0 - d.x) * pull;
+          d.y += (0 - d.y) * pull;
+          d.z += 3800 * e + d.vz * 80;   // дуже сильний Z-поштовх
 
-          d.baseOpacity = Math.max(0, d.baseOpacity - e * 1.2);
-          d.el.style.filter = `blur(${e * 6}px)`;   // розмиття для глибини
-
-          updateTransform(d);
+          d.opacity = Math.max(0, d.opacity - e * 2.2);
+          d.el.style.opacity = d.opacity;
+          d.el.style.filter = `blur(${e * 12}px)`;  // сильне розмиття
+          d.el.style.transform = `translate3d(${d.x}px,${d.y}px,${d.z}px) scale(${1 + e * 4})`;  // масштабування
         });
 
-        // Камера рухається вперед
-        scene.style.transform = `translate3d(0,0,${-800 * e}px) scale(${1 + e * 0.4})`;
+        // Камера летить уперед + легке тремтіння
+        const camZ = -1200 * e;
+        scene.style.transform = `translate3d(0,0,${camZ}px) scale(${1 + e * 0.6})`;
 
-        if (t >= 1) {
-          location.href = './main.html#overview';
+        if (elapsed > 1400) {
+          location.replace('./main.html#overview');  // replace — без історії назад
         }
       }
 
-      requestAnimationFrame(loop);
+      requestAnimationFrame(raf);
     }
 
-    requestAnimationFrame(loop);
+    requestAnimationFrame(raf);
 
-    startBtn.addEventListener('click', () => {
-      if (flying) return;
-      flying = true;
-      startTime = performance.now();
+    goBtn.onclick = () => {
+      if (isFlying) return;
+      isFlying = true;
+      flyStart = performance.now();
       document.body.classList.add('flying');
       fade.style.opacity = '1';
-    });
+      goBtn.disabled = true;
+    };
   </script>
 </body>
 </html>
