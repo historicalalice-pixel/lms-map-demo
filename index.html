@@ -7,10 +7,10 @@
 
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500&display=swap');
+
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:#05070d;color:#e8eefc;overflow:hidden}
 
-  /* ====== INTRO (твоя стартова) ====== */
   #intro{
     position:fixed; inset:0;
     background:
@@ -18,11 +18,36 @@
     overflow:hidden;
   }
 
-  #stage{position:absolute; inset:0; perspective:1200px; transform-style:preserve-3d;}
-  #cloud{
-    position:absolute; inset:-20%;
-    filter: blur(0px);
+  #stage{
+    position:absolute; inset:0;
+    perspective:1200px;
     transform-style:preserve-3d;
+    will-change:transform;
+  }
+
+  #cloud{
+    position:absolute; inset:-25%;
+    transform-style:preserve-3d;
+    will-change:transform;
+  }
+
+  /* speed lines (for fly-through) */
+  #warp{
+    position:absolute; inset:-40%;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .35s ease;
+    will-change:opacity, transform;
+  }
+  .streak{
+    position:absolute;
+    width:2px;
+    height:clamp(80px, 18vh, 220px);
+    background:linear-gradient(to bottom, rgba(232,238,252,0), rgba(232,238,252,.35), rgba(232,238,252,0));
+    border-radius:999px;
+    filter:blur(.2px);
+    opacity:0;
+    will-change:transform, opacity;
   }
 
   .intro-content{
@@ -30,8 +55,10 @@
     transform:translate(-50%,-50%);
     text-align:center;
     width:min(920px,92vw);
-    z-index:5;
+    z-index:6;
     pointer-events:auto;
+    transition:transform .7s cubic-bezier(.2,.9,.1,1), opacity .4s ease;
+    will-change:transform, opacity;
   }
 
   h1{
@@ -64,39 +91,38 @@
     border:1px solid rgba(232,238,252,.28);
     border-radius:0;
     cursor:pointer;
-    transition:transform .2s ease, border-color .2s ease, background .2s ease;
+    transition:transform .2s ease, border-color .2s ease, background .2s ease, opacity .2s ease;
   }
   #enterBtn:hover{transform:translateY(-1px); border-color:rgba(232,238,252,.55); background:rgba(232,238,252,.06);}
   #enterBtn:active{transform:translateY(0px) scale(.99);}
+  #enterBtn[disabled]{opacity:.5; cursor:default}
 
-  /* Fade overlay for transition */
   #fadeOverlay{
     position:fixed; inset:0;
     background:#05070d;
     opacity:0;
     pointer-events:none;
-    transition:opacity .75s ease;
-    z-index:10;
+    transition:opacity .85s ease;
+    z-index:20;
   }
 
   .hint{
     position:fixed; left:18px; bottom:14px;
     font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     font-size:12px; opacity:.55;
-    z-index:6; user-select:none;
+    z-index:10; user-select:none;
   }
 
-  /* bubbles (роки) */
   .year{
     position:absolute;
     font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     font-weight:400;
     color:rgba(232,238,252,.22);
     text-shadow:0 6px 24px rgba(0,0,0,.35);
-    transform:translate3d(var(--x,0px), var(--y,0px), var(--z,0px));
-    will-change:transform, opacity;
+    will-change:transform, opacity, filter;
     pointer-events:none;
     user-select:none;
+    transform-style:preserve-3d;
   }
   .year::before{
     content:"";
@@ -106,12 +132,23 @@
     opacity:.6;
   }
   .year span{display:inline-block; padding:2px 6px; font-size:12px; opacity:.95;}
+
+  body.is-flying .hint{opacity:0}
+  body.is-flying #warp{opacity:1}
+  body.is-flying .intro-content{
+    opacity:0;
+    transform:translate(-50%,-55%) scale(.98);
+    pointer-events:none;
+  }
 </style>
 </head>
 
 <body>
 <div id="intro">
-  <div id="stage"><div id="cloud"></div></div>
+  <div id="stage">
+    <div id="warp"></div>
+    <div id="cloud"></div>
+  </div>
 
   <div class="intro-content" id="center">
     <h1>Навчання — це подорож</h1>
@@ -121,82 +158,166 @@
 </div>
 
 <div id="fadeOverlay"></div>
-<div class="hint">ПОЧАТИ → перехід на головну</div>
+<div class="hint">ПОЧАТИ → проліт → main.html#overview</div>
 
 <script>
-  // ====== INTRO: years cloud (м’який дрейф) ======
+  // helpers
+  const rand = (min, max) => min + Math.random()*(max-min);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const easeInOutCubic = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+  const easeOutCubic = t => 1 - Math.pow(1-t, 3);
+
+  // DOM
+  const stage = document.getElementById('stage');
   const cloud = document.getElementById('cloud');
+  const warp  = document.getElementById('warp');
+  const enterBtn = document.getElementById('enterBtn');
+  const fade = document.getElementById('fadeOverlay');
 
-  function rand(min, max){ return min + Math.random()*(max-min); }
-
+  // years
   const YEARS_COUNT = 70;
   const years = [];
   const now = new Date().getFullYear();
-  const minY = 1800;
-  const maxY = now;
+  const minY = 1800, maxY = now;
 
-  for(let i=0;i<YEARS_COUNT;i++){
+  for (let i=0;i<YEARS_COUNT;i++){
     const el = document.createElement('div');
     el.className = 'year';
     const y = Math.floor(rand(minY, maxY));
     el.innerHTML = `<span>${String(y)}</span>`;
     cloud.appendChild(el);
 
-    // place around center (НЕ коло, а “хмара”)
     const r = rand(140, 520);
     const a = rand(0, Math.PI*2);
-    const x0 = Math.cos(a)*r + rand(-120,120);
-    const y0 = Math.sin(a)*r + rand(-80,80);
-    const z0 = rand(-260, 260);
+    const x0 = Math.cos(a)*r + rand(-140,140);
+    const y0 = Math.sin(a)*r + rand(-90,90);
+    const z0 = rand(-320, 260);
 
-    years.push({
+    const p = {
       el,
-      x0, y0, z0,
-      x: x0, y: y0, z: z0,
+      x0,y0,z0,
+      x:x0,y:y0,z:z0,
       vx: rand(-0.06, 0.06),
       vy: rand(-0.05, 0.05),
       vz: rand(-0.04, 0.04),
       s: rand(0.9, 1.35),
       o: rand(0.14, 0.35)
-    });
+    };
 
-    el.style.opacity = years[i]?.o ?? 0.22;
-    el.style.transform = `translate3d(${x0}px,${y0}px,${z0}px) scale(${years[i]?.s ?? 1})`;
+    years.push(p);
+    el.style.opacity = p.o;
+    el.style.transform = `translate3d(${x0}px,${y0}px,${z0}px) scale(${p.s})`;
   }
 
+  // warp streaks
+  const STREAKS = 46;
+  const streaks = [];
+  for (let i=0;i<STREAKS;i++){
+    const s = document.createElement('div');
+    s.className = 'streak';
+    warp.appendChild(s);
+
+    const px = rand(5, 95);
+    const py = rand(5, 95);
+    const z = rand(-200, 400);
+    const sp = rand(0.6, 1.6);
+
+    s.style.left = px + '%';
+    s.style.top  = py + '%';
+    s.style.opacity = '0';
+    streaks.push({ el:s, z, sp, y:0 });
+  }
+
+  // mouse cam
   let mx=0, my=0;
   window.addEventListener('mousemove', (e)=>{
     mx = (e.clientX / window.innerWidth - 0.5);
     my = (e.clientY / window.innerHeight - 0.5);
   });
 
-  function tick(){
-    // subtle camera drift
+  // flight state
+  let flying = false;
+  let flightStart = 0;
+  const FLIGHT_MS = 1050;
+  const REDIRECT_AFTER = 1250;
+
+  function tick(ts){
+    // base cam drift
     const camX = mx * 40;
     const camY = my * 28;
-    cloud.style.transform = `translate3d(${camX}px,${camY}px,0) rotateX(${(-my*6)}deg) rotateY(${(mx*8)}deg)`;
 
-    for(const p of years){
-      // gentle drift + soft bounds
-      p.x += p.vx; p.y += p.vy; p.z += p.vz;
-      const dx = p.x - p.x0, dy = p.y - p.y0, dz = p.z - p.z0;
-      p.x -= dx * 0.002; p.y -= dy * 0.002; p.z -= dz * 0.002;
+    cloud.style.transform =
+      `translate3d(${camX}px,${camY}px,0)
+       rotateX(${(-my*6)}deg) rotateY(${(mx*8)}deg)`;
 
-      p.el.style.opacity = p.o;
-      p.el.style.transform = `translate3d(${p.x}px,${p.y}px,${p.z}px) scale(${p.s})`;
+    if (!flying){
+      for (const p of years){
+        p.x += p.vx; p.y += p.vy; p.z += p.vz;
+        const dx = p.x - p.x0, dy = p.y - p.y0, dz = p.z - p.z0;
+        p.x -= dx * 0.002; p.y -= dy * 0.002; p.z -= dz * 0.002;
+
+        p.el.style.opacity = p.o;
+        p.el.style.filter = 'none';
+        p.el.style.transform = `translate3d(${p.x}px,${p.y}px,${p.z}px) scale(${p.s})`;
+      }
+      requestAnimationFrame(tick);
+      return;
     }
+
+    // flight
+    const t = clamp((ts - flightStart) / FLIGHT_MS, 0, 1);
+    const e = easeInOutCubic(t);
+    const eo = easeOutCubic(t);
+
+    const zPush = - (e * 820);
+    const tiltX = -my*6 + (-8 * e);
+    const tiltY =  mx*8 + (10 * e);
+    const scale = 1 + 0.18 * e;
+    stage.style.transform =
+      `translate3d(0,0,${zPush}px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale(${scale})`;
+
+    for (const p of years){
+      const pull = e;
+      const cx = p.x0 * (1 - pull);
+      const cy = p.y0 * (1 - pull);
+
+      const z = p.z0 + (-120) + (eo * 900);
+
+      const swirl = (1 - t) * 0.9;
+      const sx = cx + Math.sin((p.x0+p.y0)*0.002 + t*10) * 22 * swirl;
+      const sy = cy + Math.cos((p.x0-p.y0)*0.002 + t*10) * 16 * swirl;
+
+      p.el.style.opacity = (p.o + 0.10*e).toFixed(3);
+      p.el.style.filter = `blur(${(t*0.6).toFixed(2)}px)`;
+      p.el.style.transform = `translate3d(${sx}px,${sy}px,${z}px) scale(${p.s})`;
+    }
+
+    const warpOpacity = clamp(e*1.2, 0, 1);
+    for (const s of streaks){
+      s.y += (10 + 28*s.sp) * (0.35 + e);
+      if (s.y > window.innerHeight*1.4) s.y = -window.innerHeight*0.6;
+      s.el.style.transform = `translate3d(0, ${s.y}px, ${s.z}px)`;
+      s.el.style.opacity = (warpOpacity * 0.75).toFixed(3);
+    }
+
     requestAnimationFrame(tick);
   }
-  tick();
 
-  // ====== Transition to MAIN ======
-  const enterBtn = document.getElementById('enterBtn');
-  const fade = document.getElementById('fadeOverlay');
+  requestAnimationFrame(tick);
 
+  // click
   enterBtn.addEventListener('click', ()=>{
-    fade.style.opacity = '1';
-    // коротка пауза під fade, потім перехід
-    setTimeout(()=>{ window.location.href = './main.html'; }, 650);
+    if (flying) return;
+    flying = true;
+    enterBtn.disabled = true;
+
+    document.body.classList.add('is-flying');
+    flightStart = performance.now();
+
+    setTimeout(()=>{ fade.style.opacity = '1'; }, 720);
+
+    // IMPORTANT: go to overview view
+    setTimeout(()=>{ window.location.href = './main.html#overview'; }, REDIRECT_AFTER);
   });
 </script>
 </body>
