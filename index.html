@@ -3,11 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>LMS — Початок</title>
+  <title>LMS — Початок (Debug)</title>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
-
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
     body{overflow:hidden;background:#000;color:#f3eed7}
@@ -79,7 +78,7 @@
       border:1.5px solid rgba(243,238,215,.55);
       color:#f3eed7;
       cursor:pointer;
-      transition:transform .35s ease, background .35s ease, border-color .35s ease, opacity .35s ease;
+      transition:transform .35s ease, background .35s ease, border-color .35s ease;
     }
     #startBtn:hover{
       border-color: rgba(243,238,215,.92);
@@ -87,13 +86,18 @@
       transform: translateY(-3px);
     }
 
-    .hint{
-      position:fixed; left:18px; bottom:14px;
-      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      font-size:12px; opacity:.6;
-      z-index:3;
-      user-select:none;
+    #debug{
+      position:fixed; left:10px; bottom:10px;
+      z-index:5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:13px;
+      background:rgba(0,0,0,.45);
+      border:1px solid rgba(255,255,255,.12);
+      padding:10px 12px;
+      border-radius:10px;
+      color:rgba(243,238,215,.92);
       pointer-events:none;
+      white-space:pre;
     }
 
     #fade{
@@ -104,7 +108,6 @@
       pointer-events:none;
       z-index:4;
     }
-
     body.flying .intro{opacity:0}
   </style>
 </head>
@@ -119,7 +122,7 @@
     <button id="startBtn">ПОЧАТИ</button>
   </div>
 
-  <div class="hint">Рухай мишкою → зараз має бути ВИДНО паралакс (тест)</div>
+  <div id="debug">DEBUG: loading…</div>
   <div id="fade"></div>
 
   <script type="module">
@@ -128,29 +131,27 @@
     const wrap = document.getElementById("wrap");
     const btn  = document.getElementById("startBtn");
     const fade = document.getElementById("fade");
+    const dbg  = document.getElementById("debug");
 
-    // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     wrap.appendChild(renderer.domElement);
 
-    // Scene + Fog
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x000000, 8, 90);
+    scene.fog = new THREE.Fog(0x000000, 6, 120);
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 240);
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 260);
     camera.position.set(0, 0, 16);
 
-    // === Visible parallax field (2 layers) ===
-    function makeDust(count, zNear, zFar, size, opacity){
+    // BIG visible markers (неможливо не побачити рух)
+    function makePoints(count, zNear, zFar, size, opacity){
       const pos = new Float32Array(count * 3);
       for(let i=0;i<count;i++){
         const k = i*3;
-        pos[k+0] = (Math.random()-0.5) * 70;               // ширше
-        pos[k+1] = (Math.random()-0.5) * 40;
-        pos[k+2] = -(zNear + Math.random()*(zFar-zNear));  // глибина
+        pos[k+0] = (Math.random()-0.5) * 90;
+        pos[k+1] = (Math.random()-0.5) * 50;
+        pos[k+2] = -(zNear + Math.random()*(zFar-zNear));
       }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
@@ -166,27 +167,18 @@
       return pts;
     }
 
-    // ближній шар — більші точки (щоб ти точно бачив)
-    const dustNear = makeDust(900, 6, 40, 0.085, 0.22);
-    // дальній шар — дрібніші
-    const dustFar  = makeDust(1400, 40, 140, 0.045, 0.16);
+    const near = makePoints(500, 4, 30, 0.18, 0.28);   // ВЕЛИКІ точки
+    const mid  = makePoints(900, 30, 80, 0.10, 0.18);
+    const far  = makePoints(1400, 80, 170, 0.06, 0.14);
 
-    // small reference mesh (для гарантії)
-    const dot = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 18, 18),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent:true, opacity:0.12 })
-    );
-    dot.position.set(0, 0, -18);
-    scene.add(dot);
-
-    // Mouse
+    // target from mouse
     let mx = 0, my = 0;
     window.addEventListener("mousemove", (e)=>{
       mx = (e.clientX / window.innerWidth  - 0.5);
       my = (e.clientY / window.innerHeight - 0.5);
     });
 
-    // Button (поки просто перехід)
+    // button
     let flying = false;
     btn.addEventListener("click", ()=>{
       if (flying) return;
@@ -200,21 +192,33 @@
     function animate(){
       const t = performance.now() * 0.001;
 
-      // >>> ЗРОБЛЕНО ТАК, ЩОБ РУХ БУВ ВИДНО <<<
-      const tx = mx * 6.5;     // було замало — тепер очевидно
-      const ty = -my * 4.2;
+      // AUTO MOVE (щоб ти бачив навіть без мишки)
+      const autoX = Math.sin(t * 0.55) * 6.0;
+      const autoY = Math.cos(t * 0.42) * 3.6;
 
-      // легке зміщення камери (а не тільки lookAt) — parallax стає супер-видимим
+      // MIX mouse + auto
+      const tx = autoX + mx * 8.0;
+      const ty = autoY - my * 5.0;
+
+      // Camera moves (parallax = 100% visible)
       camera.position.x += (tx - camera.position.x) * 0.06;
       camera.position.y += (ty - camera.position.y) * 0.06;
 
-      camera.lookAt(tx * 0.15, ty * 0.15, -22);
+      camera.lookAt(tx * 0.18, ty * 0.18, -40);
 
-      // дуже легкий “живий” рух шару пилу (майже непомітно, але додає глибини)
-      dustNear.rotation.z = Math.sin(t * 0.25) * 0.03;
-      dustFar.rotation.z  = Math.sin(t * 0.18) * 0.02;
+      // subtle swirl (to show motion)
+      near.rotation.z = Math.sin(t * 0.35) * 0.06;
+      mid.rotation.z  = Math.sin(t * 0.28) * 0.04;
+      far.rotation.z  = Math.sin(t * 0.22) * 0.03;
 
-      dot.material.opacity = 0.10 + (Math.sin(t * 1.7) + 1) * 0.03;
+      // DEBUG текст (координати точно мають мінятись)
+      dbg.textContent =
+`DEBUG
+camera.x: ${camera.position.x.toFixed(2)}
+camera.y: ${camera.position.y.toFixed(2)}
+mouse.x : ${mx.toFixed(2)}
+mouse.y : ${my.toFixed(2)}
+(auto is ON)`;
 
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
