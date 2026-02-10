@@ -3,14 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>LMS — Початок (Debug)</title>
+  <title>LMS — Початок</title>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0}
-    body{overflow:hidden;background:#000;color:#f3eed7}
 
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; }
+    body{
+      overflow:hidden;
+      background:#000;
+      color:#f3eed7;
+    }
+
+    /* контейнер під canvas */
     #wrap{
       position:fixed; inset:0;
       background:
@@ -19,31 +25,37 @@
           rgba(10,10,18,.92) 60%,
           #000 100%);
     }
-    canvas{display:block;width:100%;height:100%}
+    canvas{ display:block; width:100%; height:100%; }
 
+    /* віньєтка як у референсах */
     #vignette{
       position:fixed; inset:-2px;
-      background: radial-gradient(1200px 800px at 50% 50%, transparent 40%, rgba(0,0,0,.72) 100%);
+      background: radial-gradient(1200px 800px at 50% 50%, transparent 38%, rgba(0,0,0,.78) 100%);
       pointer-events:none;
       z-index:1;
-      opacity:.9;
+      opacity:.92;
     }
 
+    /* центральний текст */
     .intro{
       position:fixed; inset:0;
-      display:flex; flex-direction:column;
-      align-items:center; justify-content:center;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
       text-align:center;
       padding:6vw;
       z-index:2;
       pointer-events:none;
       transition: opacity 1.2s ease;
     }
+
+    /* м’яка “пляма” за текстом, щоб читалось */
     .intro::before{
       content:"";
       position:absolute;
       width:min(980px,92vw);
-      height:min(520px,60vh);
+      height:min(540px,62vh);
       border-radius:999px;
       background: radial-gradient(closest-side, rgba(0,0,0,.62), rgba(0,0,0,0));
       z-index:-1;
@@ -53,14 +65,15 @@
       margin:0 0 1.1rem;
       font-family:"Cormorant Garamond", serif;
       font-weight:500;
-      font-size:clamp(3.0rem, 7.6vw, 6.8rem);
+      font-size:clamp(3.2rem, 8.2vw, 7.1rem);
       line-height:.92;
       letter-spacing:-0.01em;
       color:rgba(243,238,215,.96);
       text-shadow: 0 24px 80px rgba(0,0,0,.55);
     }
+
     .subtitle{
-      margin:0 0 2.4rem;
+      margin:0 0 2.5rem;
       font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       font-size:clamp(1.05rem,2.2vw,1.5rem);
       opacity:.86;
@@ -86,6 +99,17 @@
       transform: translateY(-3px);
     }
 
+    #fade{
+      position:fixed; inset:0;
+      background:#000;
+      opacity:0;
+      transition: opacity 1.1s ease;
+      pointer-events:none;
+      z-index:4;
+    }
+    body.flying .intro{ opacity:0; }
+
+    /* DEBUG */
     #debug{
       position:fixed; left:10px; bottom:10px;
       z-index:5;
@@ -100,15 +124,10 @@
       white-space:pre;
     }
 
-    #fade{
-      position:fixed; inset:0;
-      background:#000;
-      opacity:0;
-      transition: opacity 1.1s ease;
-      pointer-events:none;
-      z-index:4;
+    @media (max-width: 700px){
+      h1{ font-size:clamp(2.6rem, 10vw, 4.6rem); }
+      #startBtn{ padding:.95rem 2.8rem; }
     }
-    body.flying .intro{opacity:0}
   </style>
 </head>
 
@@ -122,8 +141,8 @@
     <button id="startBtn">ПОЧАТИ</button>
   </div>
 
-  <div id="debug">DEBUG: loading…</div>
   <div id="fade"></div>
+  <div id="debug">DEBUG: loading…</div>
 
   <script type="module">
     import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
@@ -133,98 +152,232 @@
     const fade = document.getElementById("fade");
     const dbg  = document.getElementById("debug");
 
+    // --- renderer
     const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     wrap.appendChild(renderer.domElement);
 
+    // --- scene/camera
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x000000, 6, 120);
+    scene.fog = new THREE.Fog(0x000000, 10, 240);
 
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 260);
-    camera.position.set(0, 0, 16);
+    const camera = new THREE.PerspectiveCamera(
+      55,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      500
+    );
+    camera.position.set(0, 0, 20);
 
-    // BIG visible markers (неможливо не побачити рух)
-    function makePoints(count, zNear, zFar, size, opacity){
-      const pos = new Float32Array(count * 3);
-      for(let i=0;i<count;i++){
-        const k = i*3;
-        pos[k+0] = (Math.random()-0.5) * 90;
-        pos[k+1] = (Math.random()-0.5) * 50;
-        pos[k+2] = -(zNear + Math.random()*(zFar-zNear));
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      const mat = new THREE.PointsMaterial({
-        color: 0xf3eed7,
-        size,
-        transparent:true,
-        opacity,
-        depthWrite:false
-      });
-      const pts = new THREE.Points(geo, mat);
-      scene.add(pts);
-      return pts;
+    // --- helper: canvas texture for years (we'll draw different year per sprite)
+    function makeYearTexture(text){
+      const c = document.createElement("canvas");
+      c.width = 512;
+      c.height = 256;
+      const ctx = c.getContext("2d");
+
+      ctx.clearRect(0,0,c.width,c.height);
+
+      // text style close to your serif look
+      ctx.fillStyle = "rgba(243,238,215,0.95)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      // big, elegant serif
+      ctx.font = "84px 'Cormorant Garamond', serif";
+      ctx.shadowColor = "rgba(0,0,0,0.45)";
+      ctx.shadowBlur  = 18;
+      ctx.fillText(String(text), c.width/2, c.height/2);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
     }
 
-    const near = makePoints(500, 4, 30, 0.18, 0.28);   // ВЕЛИКІ точки
-    const mid  = makePoints(900, 30, 80, 0.10, 0.18);
-    const far  = makePoints(1400, 80, 170, 0.06, 0.14);
+    // --- years field
+    const yearsGroup = new THREE.Group();
+    scene.add(yearsGroup);
 
-    // target from mouse
+    const NOW = new Date().getFullYear();
+    const MIN_YEAR = 1700;
+    const MAX_YEAR = NOW + 40;
+
+    // performance: reuse textures by caching per year string
+    const texCache = new Map();
+    function getYearTex(y){
+      const key = String(y);
+      if (texCache.has(key)) return texCache.get(key);
+      const t = makeYearTexture(key);
+      texCache.set(key, t);
+      return t;
+    }
+
+    // create one year sprite
+    function createYearSprite(y){
+      const mat = new THREE.SpriteMaterial({
+        map: getYearTex(y),
+        transparent: true,
+        opacity: 0.0,       // will fade in by depth
+        depthWrite: false
+      });
+
+      const s = new THREE.Sprite(mat);
+
+      // random depth spread (forward is negative z)
+      const z = - (20 + Math.random() * 220);
+      const x = (Math.random() - 0.5) * 120;
+      const yy = (Math.random() - 0.5) * 70;
+
+      s.position.set(x, yy, z);
+
+      // random size: close bigger, far smaller
+      const base = 4.5 + Math.random() * 7.5;
+      s.scale.set(base * 2.3, base * 1.15, 1);
+
+      // store custom data
+      s.userData = {
+        baseX: x,
+        baseY: yy,
+        z0: z,
+        drift: (Math.random() * 2 - 1) * 0.15,
+        wobble: Math.random() * 2 + 0.6,
+        seed: Math.random() * Math.PI * 2
+      };
+
+      yearsGroup.add(s);
+      return s;
+    }
+
+    // build field
+    const YEAR_COUNT = 220;
+    const sprites = [];
+    for (let i=0; i<YEAR_COUNT; i++){
+      const y = MIN_YEAR + Math.floor(Math.random() * (MAX_YEAR - MIN_YEAR + 1));
+      sprites.push(createYearSprite(y));
+    }
+
+    // mouse target
     let mx = 0, my = 0;
     window.addEventListener("mousemove", (e)=>{
       mx = (e.clientX / window.innerWidth  - 0.5);
       my = (e.clientY / window.innerHeight - 0.5);
     });
 
-    // button
+    // flight params
     let flying = false;
+    let zSpeed = 0.10;               // base forward speed
+    let camZ   = camera.position.z;  // we move camera.z forward (decreasing)
+    let autoPhase = 0;
+
+    // start transition
     btn.addEventListener("click", ()=>{
       if (flying) return;
       flying = true;
+
       document.body.classList.add("flying");
       fade.style.opacity = "1";
       btn.style.pointerEvents = "none";
-      setTimeout(()=>{ location.href = "./main.html#overview"; }, 850);
+
+      // small “boost” into flight for feeling
+      zSpeed = 0.18;
+
+      setTimeout(()=>{ location.href = "./main.html#overview"; }, 900);
     });
+
+    function recycleSprite(s){
+      // when sprite passes camera, push it back far and randomize x/y
+      const newZ = camZ - (180 + Math.random() * 140);  // far ahead
+      const x = (Math.random() - 0.5) * 120;
+      const y = (Math.random() - 0.5) * 70;
+      s.position.set(x, y, newZ);
+
+      const yval = MIN_YEAR + Math.floor(Math.random() * (MAX_YEAR - MIN_YEAR + 1));
+      s.material.map = getYearTex(yval);
+      s.material.needsUpdate = true;
+
+      const base = 4.5 + Math.random() * 7.5;
+      s.scale.set(base * 2.3, base * 1.15, 1);
+
+      s.userData.baseX = x;
+      s.userData.baseY = y;
+      s.userData.z0 = newZ;
+      s.userData.drift = (Math.random() * 2 - 1) * 0.15;
+      s.userData.wobble = Math.random() * 2 + 0.6;
+      s.userData.seed = Math.random() * Math.PI * 2;
+    }
 
     function animate(){
       const t = performance.now() * 0.001;
 
-      // AUTO MOVE (щоб ти бачив навіть без мишки)
-      const autoX = Math.sin(t * 0.55) * 6.0;
-      const autoY = Math.cos(t * 0.42) * 3.6;
+      // auto movement (subtle)
+      autoPhase += 0.008;
+      const autoX = Math.sin(autoPhase) * 5.8;
+      const autoY = Math.cos(autoPhase * 0.8) * 3.4;
 
-      // MIX mouse + auto
-      const tx = autoX + mx * 8.0;
-      const ty = autoY - my * 5.0;
+      // mix mouse + auto
+      const tx = autoX + mx * 10.0;
+      const ty = autoY - my * 6.5;
 
-      // Camera moves (parallax = 100% visible)
+      // camera parallax move
       camera.position.x += (tx - camera.position.x) * 0.06;
       camera.position.y += (ty - camera.position.y) * 0.06;
 
-      camera.lookAt(tx * 0.18, ty * 0.18, -40);
+      // forward “dive” (real depth)
+      // move camera forward (decrease z)
+      camZ -= zSpeed;
+      camera.position.z = camZ;
 
-      // subtle swirl (to show motion)
-      near.rotation.z = Math.sin(t * 0.35) * 0.06;
-      mid.rotation.z  = Math.sin(t * 0.28) * 0.04;
-      far.rotation.z  = Math.sin(t * 0.22) * 0.03;
+      // look forward slightly
+      camera.lookAt(
+        camera.position.x * 0.12,
+        camera.position.y * 0.12,
+        camZ - 80
+      );
 
-      // DEBUG текст (координати точно мають мінятись)
+      // update sprites: fade by distance, micro drift, recycle
+      for (const s of sprites){
+        const dz = (s.position.z - camZ); // negative = behind camera, positive = in front
+        // if object is behind camera (dz > 8), recycle far ahead
+        if (dz > 10){
+          recycleSprite(s);
+          continue;
+        }
+
+        // drift around base positions (subtle living motion)
+        const wob = Math.sin(t * s.userData.wobble + s.userData.seed);
+        s.position.x += (s.userData.baseX + wob * 1.4 - s.position.x) * 0.02;
+        s.position.y += (s.userData.baseY + Math.cos(t * (s.userData.wobble*0.9) + s.userData.seed) * 0.9 - s.position.y) * 0.02;
+
+        // fade curve by depth (further -> dim)
+        // dz is negative ahead; map to 0..1
+        const depth = THREE.MathUtils.clamp((-dz) / 240, 0, 1);
+        // emphasize mid depths
+        const opacity = 0.04 + Math.pow(depth, 1.7) * 0.34;
+        s.material.opacity = opacity;
+
+        // tiny scale by depth (near slightly bigger)
+        const sc = 1.0 + (1 - depth) * 0.35;
+        s.scale.set(s.scale.x * 0.999 + s.scale.x * 0.001, s.scale.y * 0.999 + s.scale.y * 0.001, 1);
+        s.material.rotation = Math.sin(t*0.15 + s.userData.seed) * 0.02; // barely
+
+        // optional: slightly blur feeling? (not real blur, but dim near edges)
+      }
+
+      // DEBUG
       dbg.textContent =
 `DEBUG
-camera.x: ${camera.position.x.toFixed(2)}
-camera.y: ${camera.position.y.toFixed(2)}
-mouse.x : ${mx.toFixed(2)}
-mouse.y : ${my.toFixed(2)}
-(auto is ON)`;
+cam:  x ${camera.position.x.toFixed(2)}  y ${camera.position.y.toFixed(2)}  z ${camera.position.z.toFixed(2)}
+mouse:${mx.toFixed(2)} ${my.toFixed(2)}
+speed:${zSpeed.toFixed(2)}
+years:${sprites.length}`;
 
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
     }
     requestAnimationFrame(animate);
 
+    // resize
     window.addEventListener("resize", ()=>{
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
