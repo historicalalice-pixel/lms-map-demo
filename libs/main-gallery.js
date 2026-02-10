@@ -1,272 +1,207 @@
 // libs/main-gallery.js
-import * as THREE from "./three.module.js";
-import { GALLERY_ITEMS } from "./data.js";
+// Curved 3D gallery belts (inside-a-cylinder vibe)
+// - Wheel: slow drift with inertia
+// - Drag: steer (yaw)
+// - Drag UP: reveals 3rd belt
 
-/**
- * Main gallery scene (Three.js, vanilla).
- * Goal: "inside a sphere" feel: 2 visible belts + 3rd hidden on top,
- * smooth/inertial scroll (slow), wider gaps, ~5 cards visible in the main belt.
- */
-export function initMainGallery({ mountEl, overlayEl } = {}) {
+import * as THREE from "./three.module.js";
+
+const TAU = Math.PI * 2;
+
+function clamp(v, a, b) {
+  return Math.min(b, Math.max(a, v));
+}
+
+function wrapSignedPi(angle) {
+  // map any angle to [-pi, +pi]
+  let a = (angle + Math.PI) % TAU;
+  if (a < 0) a += TAU;
+  return a - Math.PI;
+}
+
+function smoothstep(edge0, edge1, x) {
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function makeCard({ w, h, color, opacity = 0.92 }) {
+  const group = new THREE.Group();
+
+  // subtle frame
+  const frameGeo = new THREE.PlaneGeometry(w + 10, h + 10);
+  const frameMat = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.22,
+    depthWrite: false,
+  });
+  const frame = new THREE.Mesh(frameGeo, frameMat);
+  frame.position.z = -0.2;
+  group.add(frame);
+
+  // card plane
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  group.add(mesh);
+
+  // expose materials for fading
+  group.userData._cardMat = mat;
+  group.userData._frameMat = frameMat;
+
+  return group;
+}
+
+export function initMainGallery({ mountEl }) {
   if (!mountEl) throw new Error("initMainGallery: mountEl is required");
 
-  // ---- Hide overlay title/text (requested) ----
-  if (overlayEl) overlayEl.style.display = "none";
+  // clean mount
+  mountEl.innerHTML = "";
 
   // ---------- renderer ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true, // allow CSS background
+    powerPreference: "high-performance",
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  mountEl.innerHTML = "";
+  renderer.setClearColor(0x000000, 0); // transparent
   mountEl.appendChild(renderer.domElement);
 
   // ---------- scene / camera ----------
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(
-    40, // narrower FOV => fewer cards visible
+    55,
     mountEl.clientWidth / mountEl.clientHeight,
     0.1,
-    2000
+    3000
   );
-  const CAMERA_BASE = new THREE.Vector3(0, 0, 430);
-  camera.position.copy(CAMERA_BASE);
+  // camera INSIDE the cylinder
+  camera.position.set(0, 0, 0);
+  camera.lookAt(0, 0, 1);
 
-  // Soft ambient (subtle) so cards never "disappear"
-  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  // ---------- gallery params (tweak here) ----------
+  const R = 520; // cylinder radius
+  const CARD_W = 220;
+  const CARD_H = 140;
+  const GAP = 28; // distance between cards (arc length)
+  const STEP = (CARD_W + GAP) / R; // radians between cards
+  const COUNT = Math.ceil(TAU / STEP) + 2; // enough to wrap seamlessly
 
-  // ---------- tuning (the important part) ----------
-  // Card sizing
-  const CARD_W = 140;
-  const CARD_H = 92;
-  const CARD_THICK = 0.2;
+  const BELT_Y = [-80, 0, 80]; // top will animate in
+  const BELT_PHASE = [0.0, 0.9, 1.6]; // offsets so belts don't align
 
-  // Arc / spacing: larger GAP => more distance between cards
-  const GAP = 34;
+  // visibility / fade: keep about ~5 cards clearly visible
+  const FADE_START = 1.05; // rad (start fading)
+  const FADE_END = 1.65; // rad (nearly invisible)
 
-  // Cylinder/sphere-ish radius (bigger radius + smaller FOV => "inside sphere")
-  const R = 360;
+  // motion tuning (cinematic, not twitchy)
+  const AUTO_DRIFT = 0.00055; // rad/frame at 60fps (very slow)
+  const WHEEL_SENS = 0.00022; // rad per wheel delta unit
+  const DRAG_SENS = 0.0024; // rad per pixel
+  const DAMPING = 0.92; // inertia damping (0.88..0.95)
+  const MAX_VEL = 0.05; // safety clamp
 
-  // STEP in radians derived from desired arc length (width + gap)
-  const STEP = (CARD_W + GAP) / R;
+  // parallax (very important feel)
+  const PARALLAX_POS = 12; // px-ish in world units
+  const PARALLAX_ROT_Y = 0.12; // radians
+  const PARALLAX_ROT_X = 0.06;
 
-  // Number of cards around 360°. +1 for overlap (avoids micro-gaps)
-  const PER = Math.ceil((Math.PI * 2) / STEP) + 1;
+  // ---------- belts ----------
+  const belts = [];
+  const palette = [0x5c78ff, 0x47d18b, 0xffc24a, 0xb57bff, 0xff6f91, 0x66c2ff];
 
-  // Belts positions (Y) and their local radius offsets (small variation helps depth)
-  const BELTS = [
-    { y: 105, r: R * 0.98, phase: 0.0 }, // top (will be hidden/revealed)
-    { y: 0, r: R, phase: 0.35 },         // middle (main belt)
-    { y: -110, r: R * 1.02, phase: 0.70 } // bottom
-  ];
+  for (let b = 0; b < 3; b++) {
+    const belt = new THREE.Group();
+    belt.userData.baseY = BELT_Y[b];
+    belt.userData.phase = BELT_PHASE[b];
 
-  // Speed / inertia (SLOW, cinematic)
-  const AUTO_DRIFT = 0.00015;     // constant slow movement
-  const WHEEL_TO_VEL = 0.00022;   // smaller = slower wheel response
-  const DRAG_TO_VEL = 0.00065;    // pointer drag response
-  const FRICTION = 0.92;          // closer to 1 = longer glide, softer
-  const MAX_VEL = 0.035;          // cap sharp spikes
-  const PARALLAX_X = 12;          // camera parallax in 3D units
-  const PARALLAX_Y = 8;
+    for (let i = 0; i < COUNT; i++) {
+      const color = palette[(i + b * 2) % palette.length];
+      const card = makeCard({ w: CARD_W, h: CARD_H, color });
 
-  // ---------- belt builder ----------
-  const cardGeo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
+      // small random tilt to avoid "too perfect" feel
+      card.userData.tilt = (Math.random() - 0.5) * 0.10;
 
-  function makeCardMaterial(hex) {
-    // IMPORTANT: keep opaque (cards were "invisible" when transparent)
-    return new THREE.MeshBasicMaterial({
-      color: new THREE.Color(hex),
-      transparent: false,
-      opacity: 1,
-      side: THREE.DoubleSide,
-      depthWrite: true,
-    });
-  }
-
-  function buildBelt(seed = 0) {
-    const g = new THREE.Group();
-
-    for (let i = 0; i < PER; i++) {
-      // If your data.js has images later — we can swap material to textures.
-      // For now: color cards (visible always).
-      const item =
-        GALLERY_ITEMS?.[(i + seed) % (GALLERY_ITEMS?.length || 1)];
-
-      const color =
-        item?.color ||
-        ["#5bb7a5", "#8b74d9", "#e2b55b", "#6fa2d9", "#d88b7b"][(i + seed) % 5];
-
-      const mesh = new THREE.Mesh(cardGeo, makeCardMaterial(color));
-      mesh.renderOrder = 1;
-
-      // tiny thickness illusion: an extra back plane slightly behind
-      const back = new THREE.Mesh(
-        new THREE.PlaneGeometry(CARD_W, CARD_H),
-        new THREE.MeshBasicMaterial({
-          color: 0x0b1020,
-          transparent: true,
-          opacity: 0.15,
-          side: THREE.DoubleSide,
-        })
-      );
-      back.position.z = -CARD_THICK;
-      mesh.add(back);
-
-      g.add(mesh);
+      belt.add(card);
     }
 
-    scene.add(g);
-    return g;
+    scene.add(belt);
+    belts.push(belt);
   }
 
-  const beltGroups = BELTS.map((b, idx) => ({
-    cfg: { ...b },
-    group: buildBelt(idx * 7),
-  }));
-
-  // Start with top belt hidden above, like 100lostspecies
-  const TOP_HIDDEN_Y = 240;
-  beltGroups[0].cfg._yShown = BELTS[0].y;
-  beltGroups[0].cfg._yHidden = TOP_HIDDEN_Y;
-  beltGroups[0].cfg._reveal = 0; // 0..1
-  beltGroups[0].cfg.y = TOP_HIDDEN_Y;
+  // third belt starts hidden ABOVE, then revealed by drag-up
+  let reveal = 0; // 0..1
+  let revealTarget = 0; // 0..1
 
   // ---------- input state ----------
-  let mouseN = new THREE.Vector2(0, 0);
+  let yaw = 0;
+  let vel = 0;
 
-  let scrollPos = 0; // "phase" space (radians)
-  let scrollVel = 0;
+  let mouseNX = 0;
+  let mouseNY = 0;
 
-  let isDown = false;
-  let lastX = 0;
-  let lastY = 0;
+  let dragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
 
-  function clamp(v, a, b) {
-    return Math.max(a, Math.min(b, v));
+  function onWheel(e) {
+    // stop page scroll
+    e.preventDefault();
+    // keep it gentle: accumulate into velocity (inertia)
+    vel += e.deltaY * WHEEL_SENS;
+    vel = clamp(vel, -MAX_VEL, MAX_VEL);
   }
 
-  function onMouseMove(e) {
+  function onPointerDown(e) {
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    renderer.domElement.setPointerCapture?.(e.pointerId);
+  }
+
+  function onPointerMove(e) {
     const rect = renderer.domElement.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    mouseN.set((x - 0.5) * 2, (0.5 - y) * 2);
-  }
-  window.addEventListener("mousemove", onMouseMove, { passive: true });
+    mouseNX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseNY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
 
-  // Wheel — slow inertial add
-  window.addEventListener(
-    "wheel",
-    (e) => {
-      e.preventDefault?.();
+    if (!dragging) return;
 
-      // Normalize delta
-      const d = clamp(e.deltaY, -120, 120);
-      scrollVel += d * WHEEL_TO_VEL;
-      scrollVel = clamp(scrollVel, -MAX_VEL, MAX_VEL);
-    },
-    { passive: false }
-  );
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
 
-  // Pointer drag — also slow, plus reveal top belt on drag-up
-  window.addEventListener(
-    "pointerdown",
-    (e) => {
-      isDown = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-    },
-    { passive: true }
-  );
+    // horizontal steer
+    vel += dx * DRAG_SENS * 0.00065; // pixels -> small angular velocity
+    vel = clamp(vel, -MAX_VEL, MAX_VEL);
 
-  window.addEventListener(
-    "pointermove",
-    (e) => {
-      if (!isDown) return;
-
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-
-      // Horizontal drag -> scroll (soft)
-      scrollVel += -dx * DRAG_TO_VEL * 0.001;
-      scrollVel = clamp(scrollVel, -MAX_VEL, MAX_VEL);
-
-      // Drag up reveals top belt (0..1)
-      const top = beltGroups[0].cfg;
-      top._reveal = clamp(top._reveal + -dy * 0.002, 0, 1);
-    },
-    { passive: true }
-  );
-
-  window.addEventListener(
-    "pointerup",
-    () => {
-      isDown = false;
-    },
-    { passive: true }
-  );
-
-  // ---------- layout update ----------
-  function updateBelt(group, cfg, phase) {
-    // phase is in radians: makes it feel infinite (rotating cylinder)
-    for (let i = 0; i < group.children.length; i++) {
-      const m = group.children[i];
-
-      const a = i * STEP + phase + cfg.phase;
-      const x = Math.sin(a) * cfg.r;
-      const z = Math.cos(a) * cfg.r;
-
-      m.position.set(x, cfg.y, z);
-
-      // face inward toward camera origin (inside-sphere vibe)
-      m.lookAt(0, cfg.y, 0);
-
-      // subtle depth cue: cards fade a bit when behind (never invisible)
-      const behind = z < 0 ? 1 : 0;
-      const alpha = behind ? 0.55 : 0.95;
-
-      if (m.material && m.material.opacity !== alpha) {
-        m.material.transparent = true;
-        m.material.opacity = alpha;
-      }
+    // drag UP reveals 3rd belt
+    if (dy < 0) {
+      revealTarget = clamp((-dy) / 280, 0, 1);
+    } else {
+      revealTarget = 0;
     }
   }
 
-  // ---------- main loop ----------
-  function tick() {
-    // Auto drift
-    scrollVel += AUTO_DRIFT;
-
-    // Inertia / friction
-    scrollVel *= FRICTION;
-    scrollVel = clamp(scrollVel, -MAX_VEL, MAX_VEL);
-    scrollPos += scrollVel;
-
-    // Top belt returns softly when not dragging
-    const top = beltGroups[0].cfg;
-    if (!isDown) top._reveal *= 0.94;
-    top.y = THREE.MathUtils.lerp(top._yHidden, top._yShown, top._reveal);
-
-    // Camera parallax (very important)
-    const tx = CAMERA_BASE.x + mouseN.x * PARALLAX_X;
-    const ty = CAMERA_BASE.y + mouseN.y * PARALLAX_Y;
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, tx, 0.08);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, ty, 0.08);
-    camera.lookAt(0, 0, 0);
-
-    // Update belts: different speed factors mimic layered motion
-    updateBelt(beltGroups[1].group, beltGroups[1].cfg, scrollPos * 1.0);  // main
-    updateBelt(beltGroups[2].group, beltGroups[2].cfg, scrollPos * 0.92); // slightly slower
-    updateBelt(beltGroups[0].group, beltGroups[0].cfg, scrollPos * 1.08); // slightly faster
-
-    renderer.render(scene, camera);
-    requestAnimationFrame(tick);
+  function onPointerUp(e) {
+    dragging = false;
+    revealTarget = 0;
+    renderer.domElement.releasePointerCapture?.(e.pointerId);
   }
-  requestAnimationFrame(tick);
 
-  // ---------- resize ----------
+  // attach listeners (use {passive:false} for wheel)
+  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+  renderer.domElement.addEventListener("pointerdown", onPointerDown);
+  renderer.domElement.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
+
+  // resize
   function onResize() {
     const w = mountEl.clientWidth;
     const h = mountEl.clientHeight;
@@ -276,10 +211,81 @@ export function initMainGallery({ mountEl, overlayEl } = {}) {
   }
   window.addEventListener("resize", onResize);
 
+  // ---------- animation loop ----------
+  let rafId = 0;
+  function tick() {
+    rafId = requestAnimationFrame(tick);
+
+    // slow auto drift + inertia
+    vel += AUTO_DRIFT;
+    vel *= DAMPING;
+    vel = clamp(vel, -MAX_VEL, MAX_VEL);
+    yaw += vel;
+
+    // smooth reveal (no snapping)
+    reveal += (revealTarget - reveal) * 0.08;
+
+    // parallax camera (subtle)
+    camera.position.x = mouseNX * PARALLAX_POS;
+    camera.position.y = mouseNY * (PARALLAX_POS * 0.65);
+    camera.position.z = 0;
+
+    camera.rotation.y = -mouseNX * PARALLAX_ROT_Y;
+    camera.rotation.x = mouseNY * PARALLAX_ROT_X;
+
+    // update belts + cards
+    for (let b = 0; b < belts.length; b++) {
+      const belt = belts[b];
+      const isTop = b === 0;
+
+      const targetY = belt.userData.baseY + (isTop ? (1 - reveal) * 170 : 0);
+      belt.position.y += (targetY - belt.position.y) * 0.12;
+
+      const phase = belt.userData.phase;
+      const children = belt.children;
+
+      for (let i = 0; i < children.length; i++) {
+        const card = children[i];
+
+        // angle around the cylinder
+        const theta = i * STEP + yaw + phase;
+        const x = Math.sin(theta) * R;
+        const z = Math.cos(theta) * R;
+
+        card.position.set(x, belt.position.y, z);
+
+        // face inward (towards camera), keep a small tilt
+        card.lookAt(camera.position.x, belt.position.y, camera.position.z);
+        card.rotation.z += card.userData.tilt;
+
+        // fade by how far from the front
+        const a = Math.abs(wrapSignedPi(theta));
+        const fade = smoothstep(FADE_START, FADE_END, a); // 0..1
+        const alpha = 0.92 * (1 - fade);
+
+        card.userData._cardMat.opacity = alpha;
+        card.userData._frameMat.opacity = 0.22 * (1 - fade);
+
+        // small scale pop for center cards (adds depth)
+        const pop = 1 + (1 - fade) * 0.06;
+        card.scale.set(pop, pop, 1);
+      }
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  tick();
+
   return {
-    destroy() {
+    dispose() {
+      cancelAnimationFrame(rafId);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("wheel", onWheel);
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+
       renderer.dispose();
       mountEl.innerHTML = "";
     },
