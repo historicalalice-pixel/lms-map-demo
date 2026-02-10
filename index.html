@@ -24,10 +24,10 @@
 
     #vignette{
       position:fixed; inset:-2px;
-      background: radial-gradient(1200px 800px at 50% 50%, transparent 42%, rgba(0,0,0,.68) 100%);
+      background: radial-gradient(1200px 800px at 50% 50%, transparent 40%, rgba(0,0,0,.72) 100%);
       pointer-events:none;
       z-index:1;
-      opacity:.85;
+      opacity:.9;
     }
 
     .intro{
@@ -46,7 +46,7 @@
       width:min(980px,92vw);
       height:min(520px,60vh);
       border-radius:999px;
-      background: radial-gradient(closest-side, rgba(0,0,0,.58), rgba(0,0,0,0));
+      background: radial-gradient(closest-side, rgba(0,0,0,.62), rgba(0,0,0,0));
       z-index:-1;
     }
 
@@ -86,12 +86,11 @@
       background: rgba(243,238,215,.08);
       transform: translateY(-3px);
     }
-    #startBtn:active{ transform: translateY(-1px) scale(.99); }
 
     .hint{
       position:fixed; left:18px; bottom:14px;
       font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      font-size:12px; opacity:.55;
+      font-size:12px; opacity:.6;
       z-index:3;
       user-select:none;
       pointer-events:none;
@@ -120,7 +119,7 @@
     <button id="startBtn">ПОЧАТИ</button>
   </div>
 
-  <div class="hint">Рухай мишкою → відчуєш глибину (це тестовий етап)</div>
+  <div class="hint">Рухай мишкою → зараз має бути ВИДНО паралакс (тест)</div>
   <div id="fade"></div>
 
   <script type="module">
@@ -136,63 +135,58 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     wrap.appendChild(renderer.domElement);
 
-    // Scene + Fog (дає глибину як у референсі)
+    // Scene + Fog
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x000000, 10, 80);
+    scene.fog = new THREE.Fog(0x000000, 8, 90);
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(
-      55,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      200
-    );
-    camera.position.set(0, 0, 18);
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 240);
+    camera.position.set(0, 0, 16);
 
-    // ===== Test field: "dust / stars" to SEE depth + parallax =====
-    // Це тимчасово. На наступному кроці замінимо на "роки".
-    const STAR_COUNT = 850;
-    const positions = new Float32Array(STAR_COUNT * 3);
-
-    for (let i = 0; i < STAR_COUNT; i++){
-      const ix = i * 3;
-      // ширина/висота
-      positions[ix + 0] = (Math.random() - 0.5) * 42;   // x
-      positions[ix + 1] = (Math.random() - 0.5) * 24;   // y
-      // вглиб (негатив), щоб було "перед нами" в просторі
-      positions[ix + 2] = -Math.random() * 120;         // z
+    // === Visible parallax field (2 layers) ===
+    function makeDust(count, zNear, zFar, size, opacity){
+      const pos = new Float32Array(count * 3);
+      for(let i=0;i<count;i++){
+        const k = i*3;
+        pos[k+0] = (Math.random()-0.5) * 70;               // ширше
+        pos[k+1] = (Math.random()-0.5) * 40;
+        pos[k+2] = -(zNear + Math.random()*(zFar-zNear));  // глибина
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xf3eed7,
+        size,
+        transparent:true,
+        opacity,
+        depthWrite:false
+      });
+      const pts = new THREE.Points(geo, mat);
+      scene.add(pts);
+      return pts;
     }
 
-    const starGeo = new THREE.BufferGeometry();
-    starGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    // ближній шар — більші точки (щоб ти точно бачив)
+    const dustNear = makeDust(900, 6, 40, 0.085, 0.22);
+    // дальній шар — дрібніші
+    const dustFar  = makeDust(1400, 40, 140, 0.045, 0.16);
 
-    const starMat = new THREE.PointsMaterial({
-      color: 0xf3eed7,
-      size: 0.045,
-      transparent: true,
-      opacity: 0.22,
-      depthWrite: false
-    });
-
-    const stars = new THREE.Points(starGeo, starMat);
-    scene.add(stars);
-
-    // tiny reference "dot" in the depth (щоб точно було видно lookAt)
+    // small reference mesh (для гарантії)
     const dot = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent:true, opacity:0.14 })
+      new THREE.SphereGeometry(0.14, 18, 18),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent:true, opacity:0.12 })
     );
-    dot.position.set(0, 0, -22);
+    dot.position.set(0, 0, -18);
     scene.add(dot);
 
-    // ===== Mouse -> camera look (важливо: дивимось, а не рухаємо обʼєкти) =====
+    // Mouse
     let mx = 0, my = 0;
     window.addEventListener("mousemove", (e)=>{
       mx = (e.clientX / window.innerWidth  - 0.5);
       my = (e.clientY / window.innerHeight - 0.5);
     });
 
-    // ===== Button (поки просто переходить, без "прольоту") =====
+    // Button (поки просто перехід)
     let flying = false;
     btn.addEventListener("click", ()=>{
       if (flying) return;
@@ -206,18 +200,21 @@
     function animate(){
       const t = performance.now() * 0.001;
 
-      // чутливість миші (щоб ти точно бачив)
-      const tx = mx * 3.2;
-      const ty = -my * 2.1;
+      // >>> ЗРОБЛЕНО ТАК, ЩОБ РУХ БУВ ВИДНО <<<
+      const tx = mx * 6.5;     // було замало — тепер очевидно
+      const ty = -my * 4.2;
 
-      // плавний lookAt
-      camera.lookAt(tx, ty, -18);
+      // легке зміщення камери (а не тільки lookAt) — parallax стає супер-видимим
+      camera.position.x += (tx - camera.position.x) * 0.06;
+      camera.position.y += (ty - camera.position.y) * 0.06;
 
-      // дуже легкий "breathing" в зірках (щоб сцена була живою)
-      stars.rotation.z = Math.sin(t * 0.15) * 0.02;
+      camera.lookAt(tx * 0.15, ty * 0.15, -22);
 
-      // маркер дихає
-      dot.material.opacity = 0.10 + (Math.sin(t * 1.8) + 1) * 0.03;
+      // дуже легкий “живий” рух шару пилу (майже непомітно, але додає глибини)
+      dustNear.rotation.z = Math.sin(t * 0.25) * 0.03;
+      dustFar.rotation.z  = Math.sin(t * 0.18) * 0.02;
+
+      dot.material.opacity = 0.10 + (Math.sin(t * 1.7) + 1) * 0.03;
 
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
