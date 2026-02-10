@@ -11,9 +11,10 @@ export function initMainGallery({ mountEl }) {
   renderer.setClearColor(0x000000, 0);
   mountEl.appendChild(renderer.domElement);
 
-  // ---------- scene / camera ----------
+  // ---------- scene ----------
   const scene = new THREE.Scene();
 
+  // ---------- camera + rig (ВАЖЛИВО для паралаксу) ----------
   const camera = new THREE.PerspectiveCamera(
     60,
     mountEl.clientWidth / mountEl.clientHeight,
@@ -21,6 +22,11 @@ export function initMainGallery({ mountEl }) {
     5000
   );
 
+  const cameraRig = new THREE.Group(); // yaw/pitch/roll живе тут
+  scene.add(cameraRig);
+  cameraRig.add(camera);
+
+  // базова позиція камери (всередині "сфери")
   camera.position.set(0, 0, 260);
   camera.lookAt(0, 0, 0);
 
@@ -28,31 +34,11 @@ export function initMainGallery({ mountEl }) {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
 
-  // ---------- interaction state ----------
-  const mouse = { x: 0, y: 0 };
+  // dt-сумісне згладжування: t = 1 - exp(-k*dt)
+  const smooth = (current, target, k, dt) => lerp(current, target, 1 - Math.exp(-k * dt));
 
-  // scrollPos — кут (радіани) для прокрутки стрічок
-  let scrollPos = 0;
-
-  // scrollVel — швидкість (радіани/сек)
-  let scrollVel = 0;
-
-  // ТЮНІНГ ІНЕРЦІЇ (основне)
-  const INERTIA = {
-    // наскільки wheel/drag додає імпульс
-    wheelImpulse: 0.0022,   // було швидко — тут повільніше
-    dragImpulse:  0.0060,   // drag сильніший за wheel
-
-    // затухання: більше => швидше зупиняється
-    damping: 4.2,           // 3..6 норм
-
-    // max швидкість (рад/сек)
-    maxSpeed: 1.25,
-
-    // дуже повільний авто-дрифт (рад/сек)
-    autoSpeed: 0.10,
-  };
-
+  // ---------- mouse ----------
+  const mouse = { x: 0, y: 0 }; // -1..1
   function onMouseMove(e) {
     const r = renderer.domElement.getBoundingClientRect();
     const nx = (e.clientX - r.left) / r.width;
@@ -62,20 +48,26 @@ export function initMainGallery({ mountEl }) {
   }
   window.addEventListener("mousemove", onMouseMove);
 
-  // wheel -> додаємо імпульс у швидкість
+  // ---------- inertia (крок 2) ----------
+  let scrollPos = 0; // rad
+  let scrollVel = 0; // rad/sec
+
+  const INERTIA = {
+    wheelImpulse: 0.0022,
+    dragImpulse: 0.0060,
+    damping: 4.2,
+    maxSpeed: 1.25,
+    autoSpeed: 0.10,
+  };
+
   function onWheel(e) {
     e.preventDefault();
-
-    // нормалізуємо і обмежуємо піки (трекпад може давати дикі значення)
     const d = clamp(e.deltaY, -140, 140);
-
-    // знак: wheel вниз = рух “вперед” (як було)
     scrollVel += d * INERTIA.wheelImpulse;
     scrollVel = clamp(scrollVel, -INERTIA.maxSpeed, INERTIA.maxSpeed);
   }
   renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
-  // drag (перетягування мишкою) -> теж імпульс
   let dragging = false;
   let lastDragY = 0;
 
@@ -89,20 +81,18 @@ export function initMainGallery({ mountEl }) {
     const dy = e.clientY - lastDragY;
     lastDragY = e.clientY;
 
-    // dy вниз => рух вперед, тому +dy
-    scrollVel += dy * INERTIA.dragImpulse * 0.001; // px -> рад/сек імпульс
+    scrollVel += dy * INERTIA.dragImpulse * 0.001;
     scrollVel = clamp(scrollVel, -INERTIA.maxSpeed, INERTIA.maxSpeed);
   }
   function onPointerUp(e) {
     dragging = false;
     renderer.domElement.releasePointerCapture?.(e.pointerId);
   }
-
   renderer.domElement.addEventListener("pointerdown", onPointerDown);
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
 
-  // ---------- belts ----------
+  // ---------- belts/world ----------
   const world = new THREE.Group();
   scene.add(world);
 
@@ -125,7 +115,7 @@ export function initMainGallery({ mountEl }) {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.95,
-      depthWrite: false, // щоб “прозорість” не вбивала порядок
+      depthWrite: false,
     });
     return new THREE.Mesh(geo, mat);
   }
@@ -175,6 +165,28 @@ export function initMainGallery({ mountEl }) {
     }
   }
 
+  // ---------- PARALLAX (крок 3) ----------
+  // Це тюнінг “як всередині сфери”
+  const PARALLAX = {
+    // кути (в радіанах): чим менше — тим стриманіше
+    maxYaw: 0.18,     // ~10°
+    maxPitch: 0.12,   // ~7°
+    maxRoll: 0.06,    // ~3.4°
+
+    // dolly: наскільки “плаває” Z від миші/швидкості
+    dollyMouse: 16,   // px-ish у world units
+    dollySpeed: 10,   // залежність від scrollVel
+
+    // згладжування
+    follow: 7.5,      // 6..10
+  };
+
+  // поточні стани рига
+  let rigYaw = 0;
+  let rigPitch = 0;
+  let rigRoll = 0;
+  let camZ = 260; // базова Z
+
   // ---------- animate ----------
   let last = performance.now();
 
@@ -183,28 +195,44 @@ export function initMainGallery({ mountEl }) {
     last = now;
     const t = now / 1000;
 
-    // 1) базовий дуже повільний рух (як “живий” фон)
+    // ---- інерція ----
     scrollVel += INERTIA.autoSpeed * dt;
-
-    // 2) затухання (експоненційне) — головний “філ”
-    // scrollVel *= exp(-damping * dt)
     scrollVel *= Math.exp(-INERTIA.damping * dt);
-
-    // 3) clamp швидкості (без стрибків)
     scrollVel = clamp(scrollVel, -INERTIA.maxSpeed, INERTIA.maxSpeed);
-
-    // 4) інтегруємо позицію (рад)
     scrollPos += scrollVel;
 
-    // ---- паралакс камери (не чіпаємо інерцію) ----
-    const camX = mouse.x * 18;
-    const camY = -mouse.y * 10;
-    const k = 1 - Math.exp(-10 * dt); // плавність
-    camera.position.x = lerp(camera.position.x, camX, k);
-    camera.position.y = lerp(camera.position.y, camY, k);
+    // ---- ПАРАЛАКС / КАМЕРА (головне) ----
+    // yaw: миша вправо => дивимось трохи вправо (поворот рига)
+    const targetYaw = mouse.x * PARALLAX.maxYaw;
+
+    // pitch: миша вверх => дивимось трохи вверх (інвертуємо y)
+    const targetPitch = -mouse.y * PARALLAX.maxPitch;
+
+    // roll: легкий нахил — як від “інерції погляду”
+    // додаємо трохи від scrollVel, щоб відчувалась “масса”
+    const targetRoll =
+      (-mouse.x * PARALLAX.maxRoll * 0.65) +
+      clamp(scrollVel, -1, 1) * PARALLAX.maxRoll * 0.35;
+
+    // dolly: миша вверх/вниз + швидкість дають легке “занурення”
+    const targetCamZ =
+      260 +
+      (mouse.y * PARALLAX.dollyMouse) +
+      (-Math.abs(scrollVel) * PARALLAX.dollySpeed);
+
+    // згладжуємо все dt-сумісно
+    rigYaw = smooth(rigYaw, targetYaw, PARALLAX.follow, dt);
+    rigPitch = smooth(rigPitch, targetPitch, PARALLAX.follow, dt);
+    rigRoll = smooth(rigRoll, targetRoll, PARALLAX.follow, dt);
+    camZ = smooth(camZ, targetCamZ, PARALLAX.follow, dt);
+
+    cameraRig.rotation.set(rigPitch, rigYaw, rigRoll);
+    camera.position.z = camZ;
+
+    // дивимось в центр (можна потім змістити target для ще “живішого” ефекту)
     camera.lookAt(0, 0, 0);
 
-    // різні швидкості поясів
+    // ---- оновлюємо пояси ----
     updateBelt(belt1, t, scrollPos * 1.0, R);
     updateBelt(belt2, t, scrollPos * 0.86 + 1.4, R + 18);
     updateBelt(belt3, t, scrollPos * 0.92 + 2.7, R + 32);
