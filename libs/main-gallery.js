@@ -1,250 +1,331 @@
 // libs/main-gallery.js
-import * as THREE from "./three.module.js";
-// Припускаємо, що data.js експортує масив об'єктів, наприклад:
-// export const galleryData = [ { title: "...", module: "...", episode: "...", color: 0x..., imageUrl? }, ... ];
+// 3-row curved "inside sphere" gallery (100lostspecies-inspired):
+// - Center row: max ~4 readable cards
+// - Bottom row: ~half visible
+// - Top row: ~1/3 visible
+// - Slow inertial movement (wheel + drag)
+// - Camera Z fixed (no zoom-out / fly-away)
+// - Endless loop (360° ring)
 
-export function initMainGallery({ mountEl, overlayEl }) {
-  if (!mountEl) return { destroy: () => {} };
+import * as THREE from "three"; // <-- якщо локально: "./three.module.js"
+import { GALLERY_ITEMS } from "./data.js";
 
-  mountEl.innerHTML = "";
+export function initMainGallery({ mountEl }) {
+  if (!mountEl) throw new Error("initMainGallery: mountEl is required");
 
-  // ─── Renderer ───────────────────────────────────────────────
+  // ---------- utils ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  // ---------- renderer ----------
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
   renderer.setClearColor(0x000000, 0);
+  mountEl.innerHTML = "";
   mountEl.appendChild(renderer.domElement);
 
-  // ─── Scene & Camera (Z фіксований!) ─────────────────────────
-  const scene = new THREE.Scene();
-  // scene.fog = new THREE.FogExp2(0x0a0e14, 0.00028); // опціонально — легкий туман
+  // Make wheel/drag work nicely
+  renderer.domElement.style.touchAction = "none";
 
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 6000); // FOV поменше → менше карток видно
-  const CAM_Z = 1480;
+  // ---------- scene ----------
+  const scene = new THREE.Scene();
+
+  // ---------- camera (NO zoom / fixed Z) ----------
+  const camera = new THREE.PerspectiveCamera(
+    46, // tuned so center belt shows ~4 readable cards
+    mountEl.clientWidth / mountEl.clientHeight,
+    0.1,
+    5000
+  );
+
+  const CAM_Z = 900; // fixed Z
   camera.position.set(0, 0, CAM_Z);
   camera.lookAt(0, 0, 0);
 
-  const world = new THREE.Group();
-  scene.add(world);
+  // ---------- light (soft) ----------
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.45);
+  dir.position.set(300, 600, 500);
+  scene.add(dir);
 
-  // ─── Tuning (головне — ≤4 картки в центрі) ──────────────────
-  const CARD_W = 340;
+  // ---------- geometry / layout tuning ----------
+  // Bigger cards + bigger gap => fewer readable cards in frame.
+  const CARD_W = 320;
   const CARD_H = 210;
 
-  const RADIUS = 1180;               // чим більший → ширше дуга, менше карток в кадрі
-  const ROW_GAP = 280;
+  // Cylinder radius: smaller => stronger curvature (fewer visible), larger => flatter (more visible)
+  const R = 980;
 
-  const rowsConfig = [
-    { y: 0,       depthSpeed: 1.00, visibleFrac: 1.00, radiusMul: 1.00 }, // center
-    { y: -ROW_GAP * 0.9, depthSpeed: 0.94, visibleFrac: 0.55, radiusMul: 1.04 }, // bottom
-    { y: +ROW_GAP * 0.7, depthSpeed: 1.06, visibleFrac: 0.38, radiusMul: 0.96 }, // top
-  ];
+  // Distance between cards along arc (increase to see fewer + more spacing)
+  const GAP = 170;
 
-  const COUNT_VISIBLE ≈ 4.2;               // скільки хочемо бачити в центрі
-  const STEP_ANGLE = (Math.PI * 2) / 26;   // ~26–28 позицій, але видно тільки ~4
+  // Rows: center fully visible; bottom half visible; top third visible.
+  const Y_CENTER = 0;
+  const Y_BOTTOM = -(CARD_H * 0.70); // ~half visible
+  const Y_TOP = +(CARD_H * 0.92);    // ~third visible
 
-  // ─── Input state ────────────────────────────────────────────
-  const pointer = { x: 0, y: 0, down: false, lastX: 0, lastY: 0 };
+  // Count: enough to avoid seeing "ends"
+  const COUNT = 34;
 
-  let scrollX = 0;           // основна позиція (горизонталь)
-  let velocityX = 0;
+  // Convert arc step (world units) to angle step:
+  const STEP_ANGLE = (CARD_W + GAP) / R;
 
-  let liftY = 0;             // вертикальний зсув (reveal top row)
-  let liftTarget = 0;
-  let liftVelocity = 0;
+  // ---------- card textures (always visible) ----------
+  function makeCardTexture(title, subtitle, seed) {
+    const w = 768, h = 512;
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d");
 
-  // ─── Cards (будемо використовувати пул + modulo для безкінечності) ──
-  const rowGroups = [];
-  const cardPool = [];
+    // base
+    g.fillStyle = "rgba(10,14,26,1)";
+    g.fillRect(0, 0, w, h);
 
-  // Функція створення однієї картки (повторно використовуємо)
-  function createCard() {
-    const geo = new THREE.PlaneGeometry(CARD_W, CARD_H);
+    // gradient
+    const grd = g.createLinearGradient(0, 0, w, h);
+    grd.addColorStop(0, "rgba(60,140,255,0.20)");
+    grd.addColorStop(1, "rgba(50,220,180,0.10)");
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
 
-    // Простий матеріал (можна заміна на CanvasTexture або MeshStandardMaterial з текстурою)
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x2a2f38,
-      transparent: true,
-      opacity: 1,
-      side: THREE.DoubleSide,
-    });
+    // vignette
+    const vg = g.createRadialGradient(w*0.55, h*0.45, 50, w*0.55, h*0.55, 420);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(0,0,0,0.65)");
+    g.fillStyle = vg;
+    g.fillRect(0, 0, w, h);
 
-    const mesh = new THREE.Mesh(geo, mat);
+    // frame
+    g.strokeStyle = "rgba(232,238,252,0.22)";
+    g.lineWidth = 4;
+    g.strokeRect(18, 18, w - 36, h - 36);
 
-    // Легка "рамка/glass"
-    const frame = new THREE.Mesh(
-      new THREE.PlaneGeometry(CARD_W + 24, CARD_H + 24),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
+    // pseudo “art blob”
+    const rng = mulberry32(seed);
+    g.globalAlpha = 0.9;
+    g.fillStyle = `rgba(${Math.floor(120+rng()*90)},${Math.floor(140+rng()*70)},${Math.floor(170+rng()*60)},0.35)`;
+    g.beginPath();
+    g.ellipse(w*0.62, h*0.62, w*(0.18+rng()*0.06), h*(0.16+rng()*0.06), rng()*0.8, 0, Math.PI*2);
+    g.fill();
+    g.globalAlpha = 1;
+
+    // text
+    g.fillStyle = "rgba(243,238,215,0.92)";
+    g.font = "600 36px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    g.fillText(title || "Untitled", 44, 88);
+
+    g.fillStyle = "rgba(232,238,252,0.70)";
+    g.font = "500 22px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    g.fillText(subtitle || "Module", 44, 124);
+
+    const tex = new THREE.CanvasTexture(c);
+    // keep safe across three versions:
+    if ("SRGBColorSpace" in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    return tex;
+  }
+
+  function mulberry32(a) {
+    return function() {
+      let t = (a += 0x6D2B79F5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------- build rows ----------
+  const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
+
+  function createRow(y, phase) {
+    const g = new THREE.Group();
+    g.position.y = y;
+    scene.add(g);
+
+    for (let i = 0; i < COUNT; i++) {
+      const item = GALLERY_ITEMS?.[i % (GALLERY_ITEMS?.length || 1)] || {
+        title: `Card ${i+1}`,
+        subtitle: `Row`,
+      };
+
+      const tex = makeCardTexture(item.title, item.subtitle, i * 997 + Math.floor((y + 1000) * 10));
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
         transparent: true,
-        opacity: 0.09,
+        opacity: 1,
         side: THREE.DoubleSide,
-      })
-    );
-    frame.position.z = 0.3;
-    mesh.add(frame);
-
-    // Тут можна додати текст через CanvasTexture, але поки пропускаємо для прикладу
-
-    return mesh;
-  }
-
-  // Створюємо достатньо карток у пул (≈ 3 × 30 = 90)
-  for (let i = 0; i < 100; i++) {
-    cardPool.push(createCard());
-  }
-
-  // ─── Створюємо 3 ряди ───────────────────────────────────────
-  rowGroups.length = 0;
-  rowsConfig.forEach((cfg, rowIdx) => {
-    const group = new THREE.Group();
-    group.position.y = cfg.y;
-    world.add(group);
-
-    const cardsInRow = [];
-    for (let i = 0; i < 32; i++) {   // більше ніж видно, для безшовного циклу
-      const mesh = cardPool.pop() || createCard();
-      group.add(mesh);
-      cardsInRow.push({
-        mesh,
-        baseAngle: i * STEP_ANGLE,
-        dataIndex: (rowIdx * 1000 + i) % 128, // умовно — буде замінено реальними даними
+        depthWrite: false, // avoid alpha-z weirdness
       });
-    }
-    rowGroups.push({ group, cards: cardsInRow, config: cfg });
-  });
 
-  // ─── Input handlers ─────────────────────────────────────────
+      const mesh = new THREE.Mesh(planeGeo, mat);
+      mesh.userData.i = i;
+      mesh.userData.phase = phase;
+      g.add(mesh);
+    }
+    return g;
+  }
+
+  const rowTop = createRow(Y_TOP, 1.25);
+  const rowMid = createRow(Y_CENTER, 0.35);
+  const rowBot = createRow(Y_BOTTOM, 0.85);
+
+  // ---------- motion state ----------
+  // We rotate rows by a "scrollAngle". This is endless (wrap not required).
+  let scrollAngle = 0;
+  let vel = 0;
+  let targetImpulse = 0;
+
+  // Parallax (camera x/y only, z fixed)
+  let mx = 0, my = 0;
+  let camX = 0, camY = 0;
+
+  // Drag
+  let down = false;
+  let lastX = 0;
+
+  // ---------- input ----------
+  function onMouseMove(e) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / r.width;
+    const ny = (e.clientY - r.top) / r.height;
+    mx = (nx - 0.5) * 2;
+    my = (0.5 - ny) * 2; // invert (up is +)
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    const d = clamp(e.deltaY, -120, 120);
+    // VERY slow wheel -> impulse
+    targetImpulse += d * 0.00022;
+  }
+
+  function onPointerDown(e) {
+    down = true;
+    lastX = e.clientX;
+  }
+
   function onPointerMove(e) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    if (!down) return;
+    const dx = e.clientX - lastX;
+    lastX = e.clientX;
+    // slow drag -> impulse
+    targetImpulse += (-dx) * 0.00006;
+  }
 
-    if (pointer.down) {
-      const dx = e.clientX - pointer.lastX;
-      const dy = e.clientY - pointer.lastY;
+  function onPointerUp() {
+    down = false;
+  }
 
-      velocityX += dx * 0.00032;
-      liftVelocity += dy * 0.0009;   // вертикальний вплив слабший
+  window.addEventListener("mousemove", onMouseMove, { passive: true });
+  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+  window.addEventListener("pointerdown", onPointerDown, { passive: true });
+  window.addEventListener("pointermove", onPointerMove, { passive: true });
+  window.addEventListener("pointerup", onPointerUp, { passive: true });
+  window.addEventListener("pointercancel", onPointerUp, { passive: true });
 
-      pointer.lastX = e.clientX;
-      pointer.lastY = e.clientY;
+  // ---------- visibility model: "≤4 readable" ----------
+  // We fade/scale aggressively by how "front-facing" the card is.
+  // front = 1 when near front (z positive), ~0 when behind.
+  function applyCardStyle(mesh, front, isCenterRow) {
+    // readable window tuned so center shows about 4
+    const start = isCenterRow ? 0.62 : 0.68;
+    const end   = isCenterRow ? 0.90 : 0.88;
+
+    // smoothstep-like
+    let t = clamp((front - start) / (end - start), 0, 1);
+    t = t * t * (3 - 2 * t);
+
+    // opacity never goes to 0 (so "не зникає")
+    const minO = isCenterRow ? 0.10 : 0.06;
+    const maxO = isCenterRow ? 0.96 : 0.55;
+    mesh.material.opacity = lerp(minO, maxO, t);
+
+    // scale hierarchy
+    const s0 = isCenterRow ? 0.86 : 0.74;
+    const s1 = isCenterRow ? 1.06 : 0.86;
+    const s = lerp(s0, s1, t);
+    mesh.scale.setScalar(s);
+  }
+
+  // ---------- place cards on inner cylinder ----------
+  function updateRow(group, speedMul) {
+    for (const mesh of group.children) {
+      const i = mesh.userData.i || 0;
+      const phase = mesh.userData.phase || 0;
+
+      const a = i * STEP_ANGLE + scrollAngle * speedMul + phase;
+
+      const x = Math.sin(a) * R;
+      const z = Math.cos(a) * R;      // z>0 is closer to camera
+      mesh.position.set(x, 0, z);
+
+      // face camera (billboard-ish)
+      mesh.lookAt(camera.position.x, camera.position.y - group.position.y, camera.position.z);
+
+      // frontness (0..1)
+      const front = clamp((z / R + 1) * 0.5, 0, 1);
+
+      const isCenterRow = group === rowMid;
+      applyCardStyle(mesh, front, isCenterRow);
     }
   }
 
-  function onDown(e) {
-    pointer.down = true;
-    pointer.lastX = e.clientX;
-    pointer.lastY = e.clientY;
+  // ---------- loop ----------
+  let lastT = performance.now();
+  function tick(now) {
+    const dt = Math.min((now - lastT) / 1000, 0.033);
+    lastT = now;
+
+    // input -> velocity (impulse), then decay
+    vel += targetImpulse;
+    targetImpulse *= Math.pow(0.20, dt * 60); // impulse decays quickly
+
+    // damping (smooth inertial)
+    vel *= Math.pow(0.90, dt * 60);
+    vel = clamp(vel, -0.03, 0.03);
+
+    // slow auto drift (barely)
+    vel += 0.00002;
+
+    scrollAngle += vel;
+
+    // camera parallax (x/y only)
+    camX = lerp(camX, mx * 28, 1 - Math.pow(0.86, dt * 60));
+    camY = lerp(camY, my * 16, 1 - Math.pow(0.86, dt * 60));
+    camera.position.set(camX, camY, CAM_Z);
+    camera.lookAt(0, 0, 0);
+
+    // update rows (slightly different speeds => depth)
+    updateRow(rowMid, 1.00);
+    updateRow(rowBot, 0.94);
+    updateRow(rowTop, 1.06);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
   }
+  requestAnimationFrame(tick);
 
-  function onUp() {
-    pointer.down = false;
-  }
-
-  renderer.domElement.addEventListener("pointerdown", onDown);
-  renderer.domElement.addEventListener("pointerup", onUp);
-  renderer.domElement.addEventListener("pointermove", onPointerMove);
-  renderer.domElement.addEventListener("pointercancel", onUp);
-
-  // Wheel
-  renderer.domElement.addEventListener(
-    "wheel",
-    (e) => {
-      e.preventDefault();
-      const delta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 140);
-      velocityX += delta * 0.00022;
-    },
-    { passive: false }
-  );
-
-  // ─── Resize ─────────────────────────────────────────────────
-  function resize() {
-    const w = mountEl.clientWidth;
-    const h = mountEl.clientHeight;
+  // ---------- resize ----------
+  function onResize() {
+    const w = mountEl.clientWidth || window.innerWidth;
+    const h = mountEl.clientHeight || window.innerHeight;
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
-  window.addEventListener("resize", resize);
-  resize();
+  window.addEventListener("resize", onResize);
 
-  // ─── Animation loop ─────────────────────────────────────────
-  let prevTime = performance.now();
-
-  function animate(now) {
-    const dt = Math.min((now - prevTime) / 1000, 0.04);
-    prevTime = now;
-
-    // ─── Фізика ───────────────────────────────────────────────
-    const damping = Math.pow(0.84, dt * 60); // повільне затухання
-    velocityX *= damping;
-    velocityX += 0.00004; // легкий автодрейф (можна прибрати)
-
-    scrollX += velocityX;
-
-    // Вертикальний ліфт (пружинка)
-    liftVelocity *= Math.pow(0.88, dt * 60);
-    liftTarget = pointer.down ? liftTarget : 0; // повертаємо назад, коли відпустили
-    liftY += (liftTarget - liftY) * (1 - Math.pow(0.92, dt * 60));
-    liftY += liftVelocity;
-
-    // Обмежуємо, щоб верхній ряд не виліз надто сильно
-    liftY = THREE.MathUtils.clamp(liftY, -80, 140);
-
-    // ─── Паралакс від миші (дуже легкий) ─────────────────────
-    const parallaxX = pointer.x * 28;
-    const parallaxY = pointer.y * -14 + liftY * 0.4;
-
-    camera.position.x += (parallaxX - camera.position.x) * (1 - Math.pow(0.86, dt * 60));
-    camera.position.y += (parallaxY - camera.position.y) * (1 - Math.pow(0.86, dt * 60));
-    camera.position.z = CAM_Z;
-    camera.lookAt(0, 0, 0);
-
-    // ─── Оновлення рядів ──────────────────────────────────────
-    rowGroups.forEach(({ cards, config }) => {
-      const { depthSpeed, visibleFrac, radiusMul } = config;
-      const rowScroll = scrollX * depthSpeed;
-
-      cards.forEach((card) => {
-        const angle = card.baseAngle + rowScroll;
-        const normAngle = angle % (Math.PI * 2);
-        if (normAngle < 0) normAngle += Math.PI * 2;
-
-        const x = Math.sin(normAngle) * RADIUS * radiusMul;
-        const z = Math.cos(normAngle) * RADIUS * radiusMul;
-
-        card.mesh.position.set(x, 0, z);
-        card.mesh.lookAt(0, 0, 0);
-
-        // Visibility & scale (головний контроль — скільки видно)
-        const frontness = (Math.cos(normAngle) + 1) * 0.5; // 0..1
-        const vis = THREE.MathUtils.smoothstep(0.62, 0.94, frontness * visibleFrac);
-
-        card.mesh.visible = vis > 0.03;
-        card.mesh.material.opacity = THREE.MathUtils.lerp(0.08, 1.0, vis);
-        const s = THREE.MathUtils.lerp(0.82, 1.08, vis);
-        card.mesh.scale.set(s, s, 1);
-      });
-    });
-
-    renderer.render(scene, camera);
-    requestAnimationFrame(animate);
-  }
-
-  requestAnimationFrame(animate);
-
-  // ─── Destroy ────────────────────────────────────────────────
   return {
     destroy() {
-      window.removeEventListener("resize", resize);
-      renderer.domElement.removeEventListener("pointerdown", onDown);
-      renderer.domElement.removeEventListener("pointerup", onUp);
-      renderer.domElement.removeEventListener("pointermove", onPointerMove);
-      renderer.domElement.removeEventListener("pointercancel", onUp);
-      // wheel не знімаємо, бо passive:false — але можна додати remove
-
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("mousemove", onMouseMove);
+      renderer.domElement.removeEventListener("wheel", onWheel);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
       renderer.dispose();
-      scene.clear();
       mountEl.innerHTML = "";
     },
   };
