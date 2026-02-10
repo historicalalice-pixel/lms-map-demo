@@ -1,253 +1,335 @@
 // libs/main-gallery.js
-import * as THREE from "three";
+// Main 3-row curved gallery (100lostspecies-style vibe).
+// - 3 belts on an "inside of a sphere" cylinder
+// - endless loop
+// - max ~4 cards visible in center row
+// - smooth wheel + drag inertia (slow, cinematic)
+// - top row: ~1/3 visible at rest, reveals more when dragging up
+
+import * as THREE from "./three.module.js";
 import { GALLERY_ITEMS } from "./data.js";
 
 export function initMainGallery({ mountEl }) {
+  // ---------- helpers ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+
   // ---------- renderer ----------
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    powerPreference: "high-performance",
-  });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
-  renderer.setClearColor(0x000000, 0); // прозоро — фон дає CSS
+  renderer.setClearColor(0x000000, 0); // transparent, we rely on page background
   mountEl.innerHTML = "";
   mountEl.appendChild(renderer.domElement);
 
   // ---------- scene ----------
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x05070d, 10, 28);
+  scene.fog = new THREE.Fog(0x060812, 140, 230);
 
-  // ---------- camera (стабільна, без zoom-out) ----------
-  const camera = new THREE.PerspectiveCamera(
-    42, // трохи вужче поле зору -> менше карток видно
-    mountEl.clientWidth / mountEl.clientHeight,
-    0.05,
-    80
-  );
-  camera.position.set(0, 0, 0.15);
-  camera.lookAt(0, 0, -1);
-
-  // light (м’яке)
-  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.55);
-  dir.position.set(2, 4, 3);
+  // lights: subtle, so cards stay readable
+  const hemi = new THREE.HemisphereLight(0xbfd7ff, 0x0a0f1d, 0.85);
+  scene.add(hemi);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+  dir.position.set(80, 120, 90);
   scene.add(dir);
 
-  // =====================================================
-  // ✅ ГЕОМЕТРІЯ ПІД ТВОЇ ВИМОГИ (4 картки видимо)
-  // =====================================================
-  const CARD_W = 3.9;       // ширше -> менше штук в кадрі
-  const CARD_H = 2.25;
+  // ---------- camera ----------
+  // FOV + distance tuned so that the center belt shows about 4 cards at once.
+  const camera = new THREE.PerspectiveCamera(
+    52,
+    mountEl.clientWidth / mountEl.clientHeight,
+    0.1,
+    700
+  );
 
-  const GAP = 1.35;         // БІЛЬШИЙ gap -> ще менше карток одночасно
-  const R = 10.4;           // менший радіус -> сильніше "всередині сфери" і боки швидше зникають
+  // "we are inside the sphere": camera is a bit back, slightly down
+  const CAM_Z = 95;
+  camera.position.set(0, -4, CAM_Z);
+  camera.lookAt(0, 0, 0);
 
-  const ARC = CARD_W + GAP;
+  // ---------- gallery geometry ----------
+  // Card size is in world units. Bigger => fewer fit on screen.
+  const CARD_W = 28;
+  const CARD_H = 18;
 
-  // кільце
-  const COUNT = Math.max(24, Math.ceil((2 * Math.PI * R) / ARC));
+  // Arc radius of belts. Bigger radius => gentler curvature.
+  const R = 92;
 
-  // =====================================================
-  // ✅ РЯДИ (центр / нижній 1/2 / верхній 1/3)
-  // =====================================================
-  // Пояснення:
-  // - центральний ряд y = 0 (строго центр)
-  // - нижній ряд: піднімаємо так, щоб було видно ~половину => y близько -CARD_H*0.70
-  // - верхній ряд: опускаємо так, щоб було видно ~третину => y близько +CARD_H*0.92
-  const Y_CENTER = 0.0;
-  const Y_BOTTOM = -CARD_H * 0.70; // ~пів-картки видно
-  const Y_TOP    =  CARD_H * 0.92; // ~третина видно
+  // Gap along the belt (arc length). Bigger gap => fewer visible cards.
+  // Tuned so the center row has ~4 visible.
+  const GAP = 10;
+  const STEP = CARD_W + GAP; // arc-length step per card
 
-  // ---------- card texture ----------
-  function makeCardTexture(labelTop, labelBottom, seed) {
-    const w = 768, h = 512;
+  // Rows Y positions:
+  // - center row is on Y = 0
+  // - bottom row is ~half visible
+  // - top row is ~1/3 visible at rest, reveals more on drag-up
+  const Y_CENTER = 0;
+  const Y_BOTTOM = -26;
+  const Y_TOP_REST = 24; // about 1/3 visible
+  const Y_TOP_FULL = 14; // revealed position (more visible)
+
+  // belt group
+  const belts = new THREE.Group();
+  scene.add(belts);
+
+  // Materials: ensure visibility + no "transparent vanish"
+  function makeCardMaterial(baseColor = 0xffffff) {
+    return new THREE.MeshStandardMaterial({
+      color: baseColor,
+      roughness: 0.85,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.88,
+    });
+  }
+
+  // A simple "poster card" using CanvasTexture (so you can later draw title/thumb).
+  // For now it draws: title + subtitle + soft vignette.
+  function makeCardTexture(title, subtitle, accent = "#bcd3ff") {
     const c = document.createElement("canvas");
-    c.width = w; c.height = h;
+    c.width = 512;
+    c.height = 512;
     const g = c.getContext("2d");
 
-    // фон
-    g.fillStyle = "rgba(255,255,255,0.06)";
-    g.fillRect(0, 0, w, h);
+    // background
+    g.fillStyle = "rgba(7,10,20,1)";
+    g.fillRect(0, 0, c.width, c.height);
 
-    // градієнт
-    const grd = g.createLinearGradient(0, 0, w, h);
-    grd.addColorStop(0, "rgba(30,90,200,0.12)");
-    grd.addColorStop(1, "rgba(80,200,160,0.08)");
-    g.fillStyle = grd;
-    g.fillRect(0, 0, w, h);
+    // subtle gradient + vignette
+    const rg = g.createRadialGradient(260, 220, 30, 260, 260, 360);
+    rg.addColorStop(0, "rgba(90,170,255,0.30)");
+    rg.addColorStop(1, "rgba(0,0,0,0.80)");
+    g.fillStyle = rg;
+    g.fillRect(0, 0, c.width, c.height);
 
-    // рамка
-    g.strokeStyle = "rgba(232,238,252,0.26)";
-    g.lineWidth = 3;
-    g.strokeRect(10, 10, w - 20, h - 20);
+    // frame
+    g.strokeStyle = "rgba(232,238,252,0.18)";
+    g.lineWidth = 6;
+    g.strokeRect(22, 22, c.width - 44, c.height - 44);
 
-    // “пляма”
-    const rng = mulberry32(seed);
+    // title
+    g.fillStyle = "rgba(232,238,252,0.92)";
+    g.font = "600 42px Inter, system-ui, -apple-system, Segoe UI, Arial";
+    g.fillText(title, 46, 92);
+
+    // subtitle
+    g.fillStyle = "rgba(232,238,252,0.62)";
+    g.font = "400 26px Inter, system-ui, -apple-system, Segoe UI, Arial";
+    g.fillText(subtitle, 46, 132);
+
+    // accent blob
     g.globalAlpha = 0.9;
-    g.fillStyle = `rgba(${Math.floor(120 + rng()*80)}, ${Math.floor(120 + rng()*80)}, ${Math.floor(120 + rng()*80)}, 0.35)`;
+    g.fillStyle = accent;
     g.beginPath();
-    g.ellipse(w*0.56, h*0.52, w*(0.22 + rng()*0.08), h*(0.20 + rng()*0.08), rng()*0.5, 0, Math.PI*2);
+    g.ellipse(300, 320, 155, 115, -0.35, 0, Math.PI * 2);
     g.fill();
     g.globalAlpha = 1;
 
-    // текст
-    g.fillStyle = "rgba(243,238,215,0.92)";
-    g.font = "600 34px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    g.fillText(labelTop, 40, 78);
-
-    g.fillStyle = "rgba(232,238,252,0.68)";
-    g.font = "500 22px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    g.fillText(labelBottom, 40, 112);
-
     const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    tex.anisotropy = 8;
+    // (якщо у твоїй three.module.js нема SRGBColorSpace — можна просто прибрати цей рядок)
+    if ("SRGBColorSpace" in THREE) tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
 
-  function mulberry32(a) {
-    return function() {
-      let t = (a += 0x6D2B79F5);
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-
-  // ---------- bands ----------
-  const bands = [];
-  function createBand(y, speedFactor) {
-    const group = new THREE.Group();
-    group.position.y = y;
-    scene.add(group);
-
+  function makeCardMesh(card) {
     const geom = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
 
-    for (let i = 0; i < COUNT; i++) {
-      const item = GALLERY_ITEMS[i % GALLERY_ITEMS.length];
-      const theta = (i / COUNT) * Math.PI * 2;
+    // texture + material
+    const tex = makeCardTexture(card.title, card.subtitle, card.accent || "#bcd3ff");
+    const mat = makeCardMaterial();
+    mat.map = tex;
+    mat.emissive = new THREE.Color(0x0b1022);
+    mat.emissiveIntensity = 0.22;
 
-      // всередині циліндра
-      const x = Math.sin(theta) * R;
-      const z = -Math.cos(theta) * R;
-
-      const tex = makeCardTexture(item.title, item.subtitle, i * 999 + Math.floor((y + 10) * 100));
-
-      const mat = new THREE.MeshStandardMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.95,  // ✅ тепер чітко видно
-        roughness: 0.85,
-        metalness: 0.0,
-      });
-
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.position.set(x, 0, z);
-      mesh.lookAt(0, 0, 0);
-      group.add(mesh);
-    }
-
-    bands.push({ group, speed: speedFactor });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.userData.card = card;
+    return mesh;
   }
 
-  // ✅ 3 ряди (всі існують одразу)
-  createBand(Y_TOP,    1.06);
-  createBand(Y_CENTER, 1.00);
-  createBand(Y_BOTTOM, 0.94);
+  // Create one belt with N cards, positioned by arc length.
+  function createBelt({ y, phase = 0, count = 28 }) {
+    const group = new THREE.Group();
+    group.userData = { y, phase, count };
 
-  // ---------- interaction: smooth spring ----------
-  const state = {
-    target: 0,
-    pos: 0,
-    vel: 0,
+    // pick cards cyclically from data
+    for (let i = 0; i < count; i++) {
+      const card = GALLERY_ITEMS[i % GALLERY_ITEMS.length] || {
+        title: `Картка ${i + 1}`,
+        subtitle: `Модуль / Епізод`,
+      };
+      const mesh = makeCardMesh(card);
+      mesh.userData.i = i;
+      group.add(mesh);
 
-    mouseX: 0,
-    mouseY: 0,
-    parX: 0,
-    parY: 0,
+      // subtle border plane behind (depth cue)
+      const border = new THREE.Mesh(
+        new THREE.PlaneGeometry(CARD_W + 1.2, CARD_H + 1.2),
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.08,
+        })
+      );
+      border.position.z = -0.05;
+      mesh.add(border);
+    }
 
-    dragging: false,
-    lastX: 0,
-  };
+    belts.add(group);
+    return group;
+  }
 
-  // ✅ повільний комфортний рух
-  const WHEEL_SENS = 0.00045;
-  const DRAG_SENS  = 0.0016;
+  const beltMid = createBelt({ y: Y_CENTER, phase: 0.0, count: 28 });
+  const beltBot = createBelt({ y: Y_BOTTOM, phase: 0.6, count: 28 });
+  const beltTop = createBelt({ y: Y_TOP_REST, phase: 1.2, count: 28 });
 
+  // ---------- motion state ----------
+  // We move along the belt by arc length (world units), then convert to angle.
+  let scroll = 0; // arc-length position
+  let vel = 0; // arc-length velocity
+  let targetVel = 0; // input accumulator (smoothed into vel)
+
+  // Parallax (camera offset)
+  const mouse = { x: 0, y: 0 };
+  let parallaxX = 0;
+  let parallaxY = 0;
+
+  // Drag
+  let isDown = false;
+  let lastX = 0;
+  let lastY = 0;
+  let revealBoost = 0; // 0..1 (from drag-up)
+  let revealBoostTarget = 0;
+
+  // ---------- input ----------
   function onWheel(e) {
-    e.preventDefault();
-    const d = Math.sign(e.deltaY) * Math.min(120, Math.abs(e.deltaY));
-    state.target += d * WHEEL_SENS;
+    // smaller = slower (cinematic)
+    const delta = e.deltaY || 0;
+
+    // wheel is usually too aggressive on trackpads, so clamp
+    const d = clamp(delta, -160, 160);
+
+    // convert wheel delta to target velocity (arc-length units / frame)
+    // IMPORTANT: very small coefficient for slow movement
+    targetVel += d * 0.006;
+
+    e.preventDefault?.();
   }
 
   function onPointerDown(e) {
-    state.dragging = true;
-    state.lastX = e.clientX;
-    renderer.domElement.setPointerCapture?.(e.pointerId);
+    isDown = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
   }
 
   function onPointerMove(e) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
-    state.mouseX = nx;
-    state.mouseY = ny;
+    const rect = mountEl.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = ((e.clientY - rect.top) / rect.height) * 2 - 1;
 
-    if (!state.dragging) return;
+    if (!isDown) return;
 
-    const dx = e.clientX - state.lastX;
-    state.lastX = e.clientX;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
 
-    // drag = обертання кільця
-    state.target += -dx * DRAG_SENS * 0.0017;
+    // Horizontal drag: scroll (slow)
+    targetVel += -dx * 0.10;
+
+    // Vertical drag-up reveals top row
+    revealBoostTarget = clamp((-dy) / 220, 0, 1);
   }
 
   function onPointerUp() {
-    state.dragging = false;
+    isDown = false;
+    revealBoostTarget = 0;
   }
 
-  renderer.domElement.style.touchAction = "none";
-  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
-  renderer.domElement.addEventListener("pointerdown", onPointerDown);
+  // passive:false to allow preventDefault for wheel.
+  mountEl.addEventListener("wheel", onWheel, { passive: false });
+  window.addEventListener("pointerdown", onPointerDown);
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerUp);
 
-  // ---------- animation loop ----------
-  let raf = 0;
-  const clock = new THREE.Clock();
+  // ---------- layout update ----------
+  function placeBelt(group, y, phase, localScroll, speedMul) {
+    group.position.y = y;
 
-  function tick() {
-    raf = requestAnimationFrame(tick);
-    const dt = Math.min(0.033, clock.getDelta());
+    const count = group.children.length;
+    const TWO_PI = Math.PI * 2;
 
-    // ✅ м’якший spring (менше різкості)
-    const spring = 14.0;
-    const damp   = 0.88;
+    for (let k = 0; k < count; k++) {
+      const mesh = group.children[k];
+      if (!mesh.isMesh) continue;
 
-    const diff = state.target - state.pos;
-    state.vel += diff * spring * dt;
-    state.vel *= Math.pow(damp, dt * 60);
-    state.pos += state.vel * dt;
+      const i = mesh.userData.i || 0;
 
-    // паралакс (камера НЕ відлітає)
-    const parLerp = 1 - Math.pow(0.08, dt * 60);
-    state.parX += (state.mouseX - state.parX) * parLerp;
-    state.parY += (state.mouseY - state.parY) * parLerp;
+      // arc-length position (wrap to 0..2π by angle modulo)
+      const s = i * STEP + phase * STEP * 6 + localScroll * speedMul;
+      const ang = (s / R) % TWO_PI;
 
-    camera.rotation.y = state.parX * 0.075;
-    camera.rotation.x = -state.parY * 0.055;
+      // "inside cylinder": cards sit on the inner surface (negative z)
+      const x = Math.sin(ang) * R;
+      const z = -Math.cos(ang) * R;
 
-    // рух стрічок
-    for (const b of bands) {
-      b.group.rotation.y = state.pos * b.speed;
+      mesh.position.set(x, 0, z);
+
+      // Billboard: face the camera, but keep a tiny tilt for depth
+      mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
+      mesh.rotation.z += Math.sin(ang * 2) * 0.03;
+
+      // Opacity: keep visible even on sides/back (no disappearing)
+      const front = clamp(((-z) / R + 1) / 2, 0, 1); // 0..1
+      mesh.material.opacity = lerp(0.55, 0.95, front);
+
+      // Slight scale emphasis near center
+      const scale = lerp(0.92, 1.04, Math.pow(front, 1.4));
+      mesh.scale.setScalar(scale);
     }
-
-    renderer.render(scene, camera);
   }
 
-  tick();
+  // ---------- animate ----------
+  let last = performance.now();
+  function tick(now) {
+    const dt = Math.min((now - last) / 1000, 0.033);
+    last = now;
+
+    // Smooth input -> velocity
+    // targetVel decays quickly so it behaves like impulses from wheel/drag
+    targetVel *= Math.pow(0.20, dt * 60);
+    vel = lerp(vel, vel + targetVel, 1 - Math.pow(0.70, dt * 60));
+
+    // Inertia damping (stronger => slower stop)
+    vel *= Math.pow(0.88, dt * 60);
+
+    // Integrate
+    scroll += vel * dt;
+
+    // Parallax: gentle, not "camera flying away"
+    parallaxX = lerp(parallaxX, mouse.x * 10, 1 - Math.pow(0.90, dt * 60));
+    parallaxY = lerp(parallaxY, -mouse.y * 6, 1 - Math.pow(0.90, dt * 60));
+    camera.position.x = parallaxX;
+    camera.position.y = -4 + parallaxY;
+
+    // Top row reveal smoothing (rest: partial)
+    revealBoost = lerp(revealBoost, revealBoostTarget, 1 - Math.pow(0.85, dt * 60));
+    const reveal = Math.max(0.33, revealBoost); // keep at least 1/3 visible
+    const topY = lerp(Y_TOP_REST, Y_TOP_FULL, reveal);
+
+    camera.lookAt(0, 0, 0);
+
+    // Place belts (slightly different speed => depth)
+    placeBelt(beltMid, Y_CENTER, 0.0, scroll, 1.0);
+    placeBelt(beltBot, Y_BOTTOM, 0.8, scroll, 0.92);
+    placeBelt(beltTop, topY, 1.6, scroll, 0.96);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 
   // ---------- resize ----------
   function onResize() {
@@ -259,13 +341,16 @@ export function initMainGallery({ mountEl }) {
   }
   window.addEventListener("resize", onResize);
 
-  return () => {
-    cancelAnimationFrame(raf);
-    window.removeEventListener("resize", onResize);
-    renderer.domElement.removeEventListener("wheel", onWheel);
-    renderer.domElement.removeEventListener("pointerdown", onPointerDown);
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", onPointerUp);
-    renderer.dispose();
+  return {
+    destroy() {
+      window.removeEventListener("resize", onResize);
+      mountEl.removeEventListener("wheel", onWheel);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      renderer.dispose();
+      mountEl.innerHTML = "";
+    },
   };
 }
