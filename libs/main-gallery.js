@@ -1,253 +1,268 @@
-import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+// libs/main-gallery.js
+import * as THREE from "./three.module.js";
 import { GALLERY_ITEMS } from "./data.js";
 
-/**
- * 100lostspecies-style main gallery:
- * - camera inside "sphere"
- * - 2 visible curved strips (rings)
- * - 3rd hidden ring above, revealed when looking up (pitch)
- * - yaw from wheel/trackpad
- * - pitch from mouse Y
- */
-export function initMainGallery(opts){
-  const { mountEl } = opts;
-
+export function initMainGallery({ mountEl, overlayEl }) {
   // ---------- renderer ----------
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    powerPreference: "high-performance",
-  });
-
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   mountEl.appendChild(renderer.domElement);
 
-  // ---------- scene/camera ----------
+  // ---------- scene / camera ----------
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(
     55,
     mountEl.clientWidth / mountEl.clientHeight,
     0.1,
-    3000
+    2000
   );
-
-  // camera is inside the sphere (near center)
+  // Камера “всередині сфери”
   camera.position.set(0, 0, 0);
 
+  // ---------- subtle fog (глибина) ----------
+  scene.fog = new THREE.FogExp2(0x05070d, 0.0022);
+
+  // ---------- lights ----------
+  const amb = new THREE.AmbientLight(0xffffff, 0.85);
+  scene.add(amb);
+
+  const dir = new THREE.DirectionalLight(0xffffff, 0.65);
+  dir.position.set(200, 300, 200);
+  scene.add(dir);
+
   // ---------- helpers ----------
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
   const lerp = (a, b, t) => a + (b - a) * t;
-  const smoothstep = (edge0, edge1, x) => {
-    const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
-    return t * t * (3 - 2 * t);
-  };
 
-  // ---------- ring layout (sphere-like) ----------
-  // Think of a big sphere of radius R. Rings are "latitude" bands on it.
-  const R = 55;                // sphere radius
-  const COUNT_PER_RING = 18;   // cards per ring (placeholder)
-  const ARC = Math.PI * 1.25;  // visible arc (not full circle, feels like a strip)
+  // ---------- interaction state ----------
+  const mouse = { x: 0, y: 0 };
+  const pointer = { down: false, sx: 0, sy: 0, dx: 0, dy: 0 };
 
-  // Ring latitudes (in radians)
-  // Two visible: slightly below and above center.
-  // Hidden third: higher (reveals when pitching up).
-  const rings = [
-    { id: "lower", lat: -0.20, speed:  0.0020, baseOpacity: 0.92 },
-    { id: "upper", lat:  0.14, speed: -0.0016, baseOpacity: 0.86 },
-    { id: "hiddenTop", lat: 0.52, speed: 0.0012, baseOpacity: 0.00 }, // will be controlled by pitch
+  // scroll/inertia
+  let scrollTarget = 0;  // куди хочемо
+  let scrollPos = 0;     // де реально
+  let scrollVel = 0;     // інерція
+
+  // верхня третя стрічка (reveal)
+  let revealTarget = 0;
+  let reveal = 0;
+
+  // ---------- belts config ----------
+  // Внутрішній “циліндр” навколо камери (ми всередині)
+  const R = 240;                  // радіус (менший = ближче)
+  const TWO_PI = Math.PI * 2;
+
+  // Картки більші
+  const CARD_W = 64;
+  const CARD_H = 40;
+
+  // Скільки карток на стрічку
+  const PER_BELT = 22;
+
+  // Відстань між картками (по дузі) — менше = щільніше
+  const ARC_STEP = TWO_PI / PER_BELT;
+
+  // Позиції стрічок по Y
+  const BELT_Y_1 = -36;
+  const BELT_Y_2 = 20;
+  const BELT_Y_3_HIDDEN = 82;  // схована зверху
+  const BELT_Y_3_VISIBLE = 52; // коли відкрили
+
+  // Невелика “вигнутість сфери” — різний R по Y
+  const beltRadiusByY = (y) => R + (y * y) * 0.012;
+
+  // ---------- materials ----------
+  // Спокійні “карткові” кольори (поки без текстур)
+  const palette = [
+    0x96c7ff, 0xa9f3d1, 0xd7b7ff, 0xffc8a8,
+    0xb8ffd2, 0xbad0ff, 0xf1d7ff, 0xffe3b5
   ];
 
-  // Build planes (placeholder cards)
-  const geom = new THREE.PlaneGeometry(6.4, 4.0, 1, 1);
-
-  // We’ll reuse items; if not enough items, loop them.
-  const items = GALLERY_ITEMS && GALLERY_ITEMS.length ? GALLERY_ITEMS : [];
-  const totalNeeded = rings.length * COUNT_PER_RING;
-
-  function makeColor(i){
-    // nice muted palette for placeholders
-    const c = new THREE.Color();
-    c.setHSL((i * 0.07) % 1, 0.42, 0.34);
-    return c;
+  function makeCardMaterial(i) {
+    const color = palette[i % palette.length];
+    return new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.35,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.88,
+      side: THREE.DoubleSide, // важливо: бачити “зсередини”
+    });
   }
 
-  const ringGroups = rings.map((r, ringIndex) => {
-    const g = new THREE.Group();
-    g.userData = { ...r, ringIndex };
-    scene.add(g);
+  // ---------- group ----------
+  const world = new THREE.Group();
+  scene.add(world);
 
-    for (let i = 0; i < COUNT_PER_RING; i++){
-      const idx = (ringIndex * COUNT_PER_RING + i) % Math.max(1, items.length);
-      const mat = new THREE.MeshBasicMaterial({
-        color: makeColor(ringIndex * 100 + i),
-        transparent: true,
-        opacity: 1,
-        depthWrite: false,
-        side: THREE.DoubleSide,
+  // ---------- create belt ----------
+  function createBelt(y, seed = 0) {
+    const belt = new THREE.Group();
+    belt.position.y = y;
+
+    const cards = [];
+    for (let i = 0; i < PER_BELT; i++) {
+      const mat = makeCardMaterial(i + seed);
+      const geo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
+      const mesh = new THREE.Mesh(geo, mat);
+
+      // легкий нахил як “плитки на стрічці”
+      mesh.rotation.z = (Math.random() - 0.5) * 0.32;
+
+      belt.add(mesh);
+      cards.push({
+        mesh,
+        baseAngle: i * ARC_STEP,
+        wobble: (Math.random() * 2 - 1) * 0.6, // дрібна жива варіація
+        phase: Math.random() * 1000,
       });
-
-      const mesh = new THREE.Mesh(geom, mat);
-      mesh.userData = {
-        ringId: r.id,
-        i,
-        // store base
-        baseOpacity: r.baseOpacity,
-      };
-      g.add(mesh);
     }
 
-    return g;
+    world.add(belt);
+    return { belt, cards };
+  }
+
+  const belt1 = createBelt(BELT_Y_1, 0);
+  const belt2 = createBelt(BELT_Y_2, 50);
+  const belt3 = createBelt(BELT_Y_3_HIDDEN, 120);
+
+  // ---------- update belt positions (wrap / infinite) ----------
+  function updateBelt({ belt, cards }, t, scroll) {
+    const y = belt.position.y;
+    const rr = beltRadiusByY(y);
+
+    for (let i = 0; i < cards.length; i++) {
+      const c = cards[i];
+
+      // головний “рух стрічки” по колу:
+      // scrollPos — це зсув у радіанах
+      let ang = c.baseAngle + scroll;
+
+      // wrap (безкінечність)
+      ang = ((ang % TWO_PI) + TWO_PI) % TWO_PI;
+
+      // позиція по колу
+      const x = Math.cos(ang) * rr;
+      const z = Math.sin(ang) * rr;
+
+      // Легка “жива” мікровібрація, але не хаос
+      const wob = Math.sin(t * 0.7 + c.phase) * 1.6 + c.wobble * 1.2;
+
+      c.mesh.position.set(x, wob, z);
+
+      // Ми всередині: картка має дивитися в центр (до камери)
+      // (тобто “всередину” циліндра)
+      c.mesh.lookAt(0, 0, 0);
+
+      // Трохи “перспективної ваги”: ближче до фронту — яскравіше/більше
+      // Фронт — коли z ~ -rr (бо камера дивиться вздовж -Z умовно)
+      const front = 1 - Math.abs((ang - Math.PI) / Math.PI); // 1 біля PI
+      const s = lerp(0.82, 1.28, front);
+      c.mesh.scale.set(s, s, 1);
+
+      const op = lerp(0.22, 0.92, front);
+      c.mesh.material.opacity = op;
+    }
+  }
+
+  // ---------- input ----------
+  function onMove(e) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    mouse.x = (nx - 0.5) * 2;
+    mouse.y = (ny - 0.5) * 2;
+
+    if (pointer.down) {
+      pointer.dx = e.clientX - pointer.sx;
+      pointer.dy = e.clientY - pointer.sy;
+
+      // Drag up => reveal третю стрічку
+      // якщо тягнемо вгору достатньо — відкриваємо
+      if (pointer.dy < -80) revealTarget = 1;
+      if (pointer.dy > -30) revealTarget = 0;
+
+      // також можна трохи “крутити” стрічку драгом
+      // (але дуже м’яко)
+      scrollTarget += pointer.dx * 0.0009;
+    }
+  }
+
+  renderer.domElement.addEventListener("mousemove", onMove);
+
+  renderer.domElement.addEventListener("pointerdown", (e) => {
+    pointer.down = true;
+    pointer.sx = e.clientX;
+    pointer.sy = e.clientY;
+    pointer.dx = 0;
+    pointer.dy = 0;
+    renderer.domElement.setPointerCapture?.(e.pointerId);
   });
 
-  // ---------- positioning on sphere ----------
-  function layoutRing(group){
-    const { lat } = group.userData;
+  renderer.domElement.addEventListener("pointerup", (e) => {
+    pointer.down = false;
+    pointer.dx = 0;
+    pointer.dy = 0;
+    renderer.domElement.releasePointerCapture?.(e.pointerId);
+  });
 
-    // For a given latitude, ring radius in XZ plane:
-    const ringRadius = Math.cos(lat) * R;
-    const y = Math.sin(lat) * R;
+  // wheel scroll (повільніше, без “шаленства”)
+  renderer.domElement.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const delta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 120);
+      scrollVel += delta * 0.00035; // чутливість колеса
+    },
+    { passive: false }
+  );
 
-    // We’ll place planes along an arc centered in front of camera.
-    // angle 0 is straight ahead (-Z direction).
-    const start = -ARC * 0.5;
-    const step = ARC / (COUNT_PER_RING - 1);
+  // ---------- animate ----------
+  let last = performance.now();
 
-    group.children.forEach((m, i) => {
-      const a = start + i * step;
+  function animate(now) {
+    const dt = Math.min((now - last) / 1000, 0.033);
+    last = now;
 
-      // sphere coordinates (camera at center):
-      const x = Math.sin(a) * ringRadius;
-      const z = -Math.cos(a) * ringRadius; // negative z = "forward"
+    const t = now / 1000;
 
-      m.position.set(x, y, z);
+    // auto drift (повільно, як у 100lostspecies)
+    scrollVel += 0.00055;
 
-      // Make each plane face the camera (center), but with slight outward curvature feel.
-      // For inside-sphere effect: plane normal points towards center -> lookAt(0,0,0)
-      m.lookAt(0, 0, 0);
+    // інерція + демпф
+    scrollVel *= Math.pow(0.88, dt * 60);
+    scrollTarget += scrollVel;
 
-      // Slight tilt for “gallery poster” vibe
-      m.rotation.z += (i - (COUNT_PER_RING - 1) / 2) * 0.006;
-    });
-  }
+    // плавно ведемо позицію
+    scrollPos = lerp(scrollPos, scrollTarget, 1 - Math.pow(0.90, dt * 60));
 
-  ringGroups.forEach(layoutRing);
+    // камера: легкий parallax від мишки
+    // (але не “літає”)
+    const camX = mouse.x * 10;
+    const camY = -mouse.y * 6;
+    camera.position.x = lerp(camera.position.x, camX, 1 - Math.pow(0.92, dt * 60));
+    camera.position.y = lerp(camera.position.y, camY, 1 - Math.pow(0.92, dt * 60));
+    camera.lookAt(0, 0, -200);
 
-  // ---------- controls: yaw/pitch ----------
-  // yaw: rotate world around Y (scroll)
-  // pitch: look up/down (mouse Y)
-  let yawTarget = 0;
-  let yaw = 0;
+    // reveal 3-ї стрічки
+    reveal = lerp(reveal, revealTarget, 1 - Math.pow(0.86, dt * 60));
+    belt3.belt.position.y = lerp(BELT_Y_3_HIDDEN, BELT_Y_3_VISIBLE, reveal);
 
-  let pitchTarget = 0;
-  let pitch = 0;
-
-  // Scroll → yaw
-  function onWheel(e){
-    // trackpad/wheel friendly
-    yawTarget += e.deltaY * 0.0013;
-    // keep it bounded a bit (feels like curated gallery)
-    yawTarget = clamp(yawTarget, -2.4, 2.4);
-  }
-  window.addEventListener("wheel", onWheel, { passive: true });
-
-  // Mouse Y → pitch (look up reveals hidden ring)
-  let mx = 0, my = 0;
-  function onMouseMove(e){
-    mx = (e.clientX / window.innerWidth) - 0.5;
-    my = (e.clientY / window.innerHeight) - 0.5;
-
-    // negative my (mouse up) => look up (positive pitch)
-    pitchTarget = clamp(-my * 0.85, -0.22, 0.55);
-  }
-  window.addEventListener("mousemove", onMouseMove, { passive: true });
-
-  // ---------- auto drift ----------
-  // two visible rings slowly drift even without input
-  // We'll do it by slowly moving yawTarget baseline
-  let autoT = 0;
-
-  // ---------- render loop ----------
-  let raf = 0;
-
-  function tick(){
-    autoT += 0.001;
-
-    // Smooth yaw/pitch
-    yaw = lerp(yaw, yawTarget, 0.08);
-    pitch = lerp(pitch, pitchTarget, 0.08);
-
-    // Apply yaw/pitch by rotating camera "look direction"
-    // Camera stays at center; we rotate it (like inside a sphere).
-    camera.rotation.order = "YXZ";
-    camera.rotation.y = yaw;
-    camera.rotation.x = pitch;
-
-    // Ring local drift (each ring rotates a touch at its own speed)
-    ringGroups.forEach((g) => {
-      const spd = g.userData.speed;
-      g.rotation.y += spd;
-
-      // extra micro parallax from mouse X (very subtle)
-      g.rotation.y += mx * 0.00035;
-    });
-
-    // Hidden ring reveal: based on pitch (looking up)
-    // When pitch ~0.10..0.45 -> fade in.
-    const reveal = smoothstep(0.08, 0.42, pitch);
-    ringGroups.forEach((g) => {
-      const isHidden = g.userData.id === "hiddenTop";
-
-      g.children.forEach((m) => {
-        // distance/angle fading: center items more visible, edges dimmer
-        // Use angle-to-forward: project position to camera forward-ish
-        const pos = m.position.clone();
-        // note: group rotation affects world pos; easiest: use world pos
-        m.getWorldPosition(pos);
-
-        // forward is camera looking direction; in camera space, z is negative forward
-        const v = pos.clone().applyMatrix4(camera.matrixWorldInverse);
-        const depth = clamp((-v.z) / R, 0, 2); // ~1 around ring
-
-        // center emphasis: items near center line are stronger
-        const edge = clamp(Math.abs(v.x) / (R * 0.9), 0, 1);
-        const centerBoost = 1 - Math.pow(edge, 1.25);
-
-        let op = (0.20 + 0.80 * centerBoost) * (0.55 + 0.45 * clamp(depth, 0, 1));
-
-        // Apply ring base + hidden reveal
-        if (isHidden){
-          op *= reveal; // fully hidden when not looking up
-          // also soften it so it feels "behind"
-          op *= 0.95;
-        } else {
-          op *= g.userData.baseOpacity;
-        }
-
-        // small dim when looking far down/up (keeps focus)
-        const focus = 1 - Math.abs(pitch) * 0.25;
-        op *= focus;
-
-        m.material.opacity = clamp(op, 0, 1);
-
-        // subtle "curve" feel: rotate slightly as it passes edges
-        // (cheap DOF vibe: edge items slightly turned)
-        const rotY = clamp(v.x / (R * 0.9), -1, 1) * 0.35;
-        // We want rotation relative to facing center; since we already lookAt(0,0,0),
-        // adjust around local Y a bit:
-        m.rotation.y = m.rotation.y * 0.98 + rotY * 0.02;
-      });
-    });
+    // рух стрічок (дві різні швидкості, щоб “жило”)
+    updateBelt(belt1, t, scrollPos * 1.00);
+    updateBelt(belt2, t, scrollPos * 0.86 + 1.2);
+    updateBelt(belt3, t, scrollPos * 0.92 + 2.6);
 
     renderer.render(scene, camera);
-    raf = requestAnimationFrame(tick);
+    requestAnimationFrame(animate);
   }
 
-  tick();
+  requestAnimationFrame(animate);
 
   // ---------- resize ----------
-  function onResize(){
+  function onResize() {
     const w = mountEl.clientWidth;
     const h = mountEl.clientHeight;
     renderer.setSize(w, h);
@@ -256,23 +271,12 @@ export function initMainGallery(opts){
   }
   window.addEventListener("resize", onResize);
 
-  // ---------- cleanup ----------
-  return () => {
-    cancelAnimationFrame(raf);
-    window.removeEventListener("wheel", onWheel);
-    window.removeEventListener("mousemove", onMouseMove);
-    window.removeEventListener("resize", onResize);
-
-    ringGroups.forEach((g) => {
-      g.children.forEach((m) => {
-        m.geometry?.dispose?.();
-        m.material?.dispose?.();
-      });
-      scene.remove(g);
-    });
-
-    geom.dispose();
-    renderer.dispose();
-    mountEl.innerHTML = "";
+  // ---------- API (якщо треба буде) ----------
+  return {
+    destroy() {
+      window.removeEventListener("resize", onResize);
+      mountEl.removeChild(renderer.domElement);
+      renderer.dispose();
+    },
   };
 }
