@@ -97,7 +97,7 @@
       position:fixed; inset:0;
       background:#000;
       opacity:0;
-      transition: opacity 1.0s ease;
+      transition: opacity 1.05s ease;
       pointer-events:none;
       z-index:4;
     }
@@ -135,7 +135,7 @@
     const fade = document.getElementById("fade");
 
     // renderer
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     wrap.appendChild(renderer.domElement);
@@ -150,8 +150,7 @@
     // texture for year
     function makeYearTexture(text){
       const c = document.createElement("canvas");
-      c.width = 512;
-      c.height = 256;
+      c.width = 512; c.height = 256;
       const ctx = c.getContext("2d");
       ctx.clearRect(0,0,c.width,c.height);
 
@@ -160,7 +159,7 @@
       ctx.font = "88px 'Cormorant Garamond', serif";
 
       ctx.shadowColor = "rgba(243,238,215,0.85)";
-      ctx.shadowBlur  = 28;
+      ctx.shadowBlur  = 26;
       ctx.fillStyle   = "rgba(243,238,215,0.70)";
       ctx.fillText(String(text), c.width/2, c.height/2);
 
@@ -204,18 +203,15 @@
       s.position.set(x, yy, z);
 
       const base = 5.0 + Math.random() * 10.0;
-      s.scale.set(base * 2.2, base * 1.1, 1);
+      s.userData.baseScaleX = base * 2.2;
+      s.userData.baseScaleY = base * 1.1;
+      s.scale.set(s.userData.baseScaleX, s.userData.baseScaleY, 1);
 
-      s.userData = {
-        baseX: x,
-        baseY: yy,
-        seed: Math.random() * Math.PI * 2,
-        wobble: Math.random() * 1.8 + 0.8,
-        baseOpacity: 0.0,
-        blur: 0.0
-      };
+      s.userData.baseX = x;
+      s.userData.baseY = yy;
+      s.userData.seed = Math.random() * Math.PI * 2;
+      s.userData.wobble = Math.random() * 1.8 + 0.8;
 
-      yearsGroup.add(s);
       return s;
     }
 
@@ -223,7 +219,9 @@
     const sprites = [];
     for (let i=0; i<YEAR_COUNT; i++){
       const y = MIN_YEAR + Math.floor(Math.random() * (MAX_YEAR - MIN_YEAR + 1));
-      sprites.push(createYearSprite(y));
+      const s = createYearSprite(y);
+      yearsGroup.add(s);
+      sprites.push(s);
     }
 
     // mouse
@@ -233,13 +231,18 @@
       my = (e.clientY / window.innerHeight - 0.5);
     });
 
+    // easing helpers
+    const clamp01 = (v)=> Math.max(0, Math.min(1, v));
+    const easeInOutCubic = (t)=> (t < 0.5) ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
+    const easeOutQuad = (t)=> 1 - (1 - t) * (1 - t);
+
     // flight transition state
     let flying = false;
-    let flightT = 0;              // 0..1
-    const FLIGHT_DUR = 1200;       // ms
+    let flightT = 0;
+    const FLIGHT_DUR = 1600; // довше = плавніше
 
     // motion
-    let zSpeed = 0.12;
+    let zSpeed = 0.10;            // базова швидкість (повільніше)
     let camZ   = camera.position.z;
     let autoPhase = 0;
 
@@ -254,18 +257,14 @@
       s.material.needsUpdate = true;
 
       const base = 5.0 + Math.random() * 10.0;
-      s.scale.set(base * 2.2, base * 1.1, 1);
+      s.userData.baseScaleX = base * 2.2;
+      s.userData.baseScaleY = base * 1.1;
 
       s.userData.baseX = x;
       s.userData.baseY = y;
       s.userData.seed = Math.random() * Math.PI * 2;
       s.userData.wobble = Math.random() * 1.8 + 0.8;
     }
-
-    // easing
-    const clamp01 = (v)=> Math.max(0, Math.min(1, v));
-    const easeInOutCubic = (t)=> (t < 0.5) ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2;
-    const easeOutCubic = (t)=> 1 - Math.pow(1 - t, 3);
 
     btn.addEventListener("click", ()=>{
       if (flying) return;
@@ -277,40 +276,39 @@
 
     let last = performance.now();
     function animate(now){
-      const dt = Math.min(40, now - last);
+      const dt = Math.min(33, now - last); // обмежуємо dt (менше ривків)
       last = now;
 
       const tsec = now * 0.001;
 
-      // auto drift + mouse
+      // camera lateral motion
       autoPhase += 0.010;
-      const autoX = Math.sin(autoPhase) * 7.0;
-      const autoY = Math.cos(autoPhase * 0.85) * 4.2;
+      const autoX = Math.sin(autoPhase) * 6.0;
+      const autoY = Math.cos(autoPhase * 0.85) * 3.6;
 
-      // during flight we reduce side motion so it feels like "tunnel"
-      const sideFactor = flying ? (1 - easeOutCubic(flightT)) : 1;
-      const tx = (autoX + mx * 14.0) * sideFactor;
-      const ty = (autoY - my * 9.0) * sideFactor;
+      const flightSideCut = flying ? (1 - easeOutQuad(flightT)) : 1;
+      const tx = (autoX + mx * 12.0) * flightSideCut;
+      const ty = (autoY - my * 8.0) * flightSideCut;
 
       camera.position.x += (tx - camera.position.x) * 0.06;
       camera.position.y += (ty - camera.position.y) * 0.06;
 
       // speed / flight
       if (!flying){
-        zSpeed += (0.12 - zSpeed) * 0.04;
+        zSpeed += (0.10 - zSpeed) * 0.04;
       } else {
-        // advance flight
         flightT = clamp01(flightT + dt / FLIGHT_DUR);
         const e = easeInOutCubic(flightT);
 
-        // accelerate camera forward hard (the "dive")
-        const targetSpeed = 0.12 + e * 2.65; // <- feel of acceleration
-        zSpeed += (targetSpeed - zSpeed) * 0.12;
+        // ГОЛОВНЕ: набагато м’якше прискорення
+        // було ~ +2.65, тепер максимум ~ +0.95 (менше "кидка")
+        const targetSpeed = 0.10 + e * 0.95;
+        zSpeed += (targetSpeed - zSpeed) * 0.10;
 
-        // fade overlay in near the end
-        if (flightT > 0.55){
-          const f = (flightT - 0.55) / 0.45;
-          fade.style.opacity = String(clamp01(f) * 1.0);
+        // fade ближче до кінця і плавніше
+        if (flightT > 0.70){
+          const f = (flightT - 0.70) / 0.30;
+          fade.style.opacity = String(clamp01(f));
         }
       }
 
@@ -340,33 +338,37 @@
         s.position.y += (s.userData.baseY + wobY * 1.2 - s.position.y) * 0.03;
 
         // depth: 0..1 (far..near)
-        const depth = THREE.MathUtils.clamp((-dz) / 380, 0, 1);
+        const depth = THREE.MathUtils.clamp((-(dz)) / 380, 0, 1);
 
-        // base visibility (far visible, near strong)
-        let opacity = 0.18 + Math.pow(depth, 1.2) * 0.72;
+        // visibility
+        let opacity = 0.16 + Math.pow(depth, 1.15) * 0.74;
 
-        // during flight: wipe years out + add "speed blur" feeling
+        // always restore scale from BASE (НЕ накопичуємо!)
+        let sx = s.userData.baseScaleX;
+        let sy = s.userData.baseScaleY;
+
         if (flying){
           const e = easeInOutCubic(flightT);
-          opacity *= (1 - e * 0.92);
-          const blur = e * 10.0;
-          // SpriteMaterial doesn't support blur; we fake it by making them larger + dimmer
-          const scaleBoost = 1 + e * 2.8;
-          s.scale.set(s.scale.x * scaleBoost, s.scale.y * scaleBoost, 1);
-          // slight stretch in Y to feel motion
-          s.scale.y *= (1 + e * 0.55);
-          // tiny jitter forward feel
-          s.material.rotation = Math.sin(tsec*0.9 + s.userData.seed) * (0.02 + e*0.08);
+
+          // м’яке згасання дат (без різкого пропадання)
+          opacity *= (1 - e * 0.88);
+
+          // легкий motion-feel, але без "вистрілу"
+          const scaleBoost = 1 + e * 0.55;
+          sx *= scaleBoost;
+          sy *= (scaleBoost * (1 + e * 0.12)); // трохи стрейчу, але дуже мало
+
+          s.material.rotation = Math.sin(tsec*0.9 + s.userData.seed) * (0.02 + e*0.05);
         } else {
           s.material.rotation = Math.sin(tsec*0.16 + s.userData.seed) * 0.02;
         }
 
+        s.scale.set(sx, sy, 1);
         s.material.opacity = opacity;
       }
 
       renderer.render(scene, camera);
 
-      // end flight => go to main
       if (flying && flightT >= 1){
         location.href = "./main.html#overview";
         return;
