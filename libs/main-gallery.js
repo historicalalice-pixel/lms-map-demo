@@ -1,6 +1,11 @@
 // libs/main-gallery.js
-// Math-only prototype: 100lostspecies-style index-relative layout (10 cards, single row).
-// Uses Three.js via importmap: "three".
+// 100lostspecies-style prototype:
+// - index-based (targetIndex/currentIndex)
+// - spring settle (mass feel)
+// - orbital arc motion around camera (not "rails")
+// - 3 rows (middle master + top/bot support) driven by one currentIndex
+// - windowing (no tunnel)
+// Uses Three.js via importmap: "three"
 
 import * as THREE from "three";
 
@@ -9,10 +14,9 @@ export function initMainGalleryMath({ mountEl }) {
 
   // ---------- helpers ----------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const lerp = (a, b, t) => a + (b - a) * t;
 
   // ---------- renderer ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.setClearColor(0x0b0f1a, 1);
 
@@ -22,38 +26,71 @@ export function initMainGalleryMath({ mountEl }) {
 
   // ---------- scene/camera ----------
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
+
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 6000);
   camera.position.set(0, 0, 1100);
   camera.lookAt(0, 0, 0);
 
-  // ---------- constants (100lostspecies-feel tuning) ----------
+  // ---------- content ----------
   const COUNT = 10;
 
-  // spacing between neighbor cards
-  const SPACING_X = 420;
+  // ---------- "100lostspecies feel" core params ----------
+  const WINDOW = 3; // show offsets -3..+3 per row
 
-  // depth per step from center
-  const DEPTH_STEP = 420;
+  // Arc feel: cards "wrap" around viewer
+  // We'll map offsets to an angle range [-ARC_ANGLE..+ARC_ANGLE]
+  const ARC_ANGLE = (52 * Math.PI) / 180; // ~±52deg across window
 
-  // scale / opacity falloff
-  const SCALE_STEP = 0.13;
-  const OPACITY_STEP = 0.32;
+  // Put center card slightly in front of origin (negative Z), not too deep
+  const Z_CENTER = 130;
 
-  // visible window around center
-  const WINDOW = 3; // offsets -3..+3 (7 cards max)
+  // Spring settle for cinematic motion
+  // (tuned to feel "heavy" but responsive)
+  const SPRING_K = 52;    // stiffness
+  const SPRING_D = 14.5;  // damping
 
-  // easing follow (cinematic)
-  const FOLLOW = 0.10;
+  // ---------- rows (middle = master, top/bot = support) ----------
+  const ROWS = [
+    {
+      kind: "top",
+      y: +210,
+      radius: 1150,
+      scaleStep: 0.16,
+      opacityStep: 0.40,
+      depthPow: 1.30,
+      centerBoost: 1.02,
+      indexShift: +1, // phase
+    },
+    {
+      kind: "mid",
+      y: 0,
+      radius: 1080,
+      scaleStep: 0.14,
+      opacityStep: 0.36,
+      depthPow: 1.25,
+      centerBoost: 1.06,
+      indexShift: 0,
+    },
+    {
+      kind: "bot",
+      y: -210,
+      radius: 1200,
+      scaleStep: 0.17,
+      opacityStep: 0.42,
+      depthPow: 1.32,
+      centerBoost: 1.01,
+      indexShift: -2, // phase
+    },
+  ];
 
-  // ---------- card factory (simple canvas label) ----------
-  function makeLabelTexture(text) {
+  // ---------- card factory (simple labels for now) ----------
+  function makeLabelTexture(text, subtitle) {
     const w = 640, h = 420;
     const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
+    c.width = w; c.height = h;
     const g = c.getContext("2d");
 
-    // background
+    // base
     g.fillStyle = "rgba(18,22,35,1)";
     g.fillRect(0, 0, w, h);
 
@@ -70,7 +107,7 @@ export function initMainGalleryMath({ mountEl }) {
     // subtitle
     g.fillStyle = "rgba(240,240,255,0.55)";
     g.font = "500 26px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    g.fillText("offset-based layout", 44, 140);
+    g.fillText(subtitle, 44, 140);
 
     const tex = new THREE.CanvasTexture(c);
     tex.anisotropy = 8;
@@ -78,36 +115,50 @@ export function initMainGalleryMath({ mountEl }) {
     return tex;
   }
 
-  // ---------- build 10 cards ----------
   const cardGeo = new THREE.PlaneGeometry(340, 220);
-  const cards = [];
 
-  for (let i = 0; i < COUNT; i++) {
-    const tex = makeLabelTexture(`Card ${i + 1}`);
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      opacity: 1,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
+  // Build meshes: rowGroups[rowIndex].children[i] corresponds to card i
+  const rowGroups = ROWS.map((row, rIdx) => {
+    const group = new THREE.Group();
+    group.position.y = row.y;
+    scene.add(group);
 
-    const mesh = new THREE.Mesh(cardGeo, mat);
-    mesh.userData.index = i;
-    scene.add(mesh);
-    cards.push(mesh);
+    for (let i = 0; i < COUNT; i++) {
+      const tex = makeLabelTexture(
+        `Card ${i + 1}`,
+        rIdx === 1 ? "master row" : "support row"
+      );
+
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+
+      const mesh = new THREE.Mesh(cardGeo, mat);
+      mesh.userData = { index: i };
+      group.add(mesh);
+    }
+
+    return group;
+  });
+
+  // ---------- state (index-based) ----------
+  let targetIndex = 0;     // integer steps
+  let currentIndex = 0;    // continuous
+  let indexVel = 0;        // spring velocity
+
+  // ---------- input ----------
+  function stepTarget(dir) {
+    targetIndex = clamp(targetIndex + dir, 0, COUNT - 1);
   }
 
-  // ---------- state ----------
-  let targetIndex = 0;
-  let currentIndex = 0;
-
-  // ---------- controls ----------
   function onWheel(e) {
     const dy = e.deltaY;
     if (Math.abs(dy) < 2) return;
-    targetIndex += dy > 0 ? 1 : -1;
-    targetIndex = clamp(targetIndex, 0, COUNT - 1);
+    stepTarget(dy > 0 ? +1 : -1);
   }
 
   let down = false;
@@ -128,18 +179,17 @@ export function initMainGalleryMath({ mountEl }) {
     lastX = e.clientX;
     dragAcc += dx;
 
-    const STEP_PX = 110;
+    // Drag threshold -> discrete steps (like curated nav)
+    const STEP_PX = 120;
 
     while (dragAcc > STEP_PX) {
-      targetIndex -= 1; // drag right -> previous
+      stepTarget(-1); // drag right -> previous
       dragAcc -= STEP_PX;
     }
     while (dragAcc < -STEP_PX) {
-      targetIndex += 1; // drag left -> next
+      stepTarget(+1); // drag left -> next
       dragAcc += STEP_PX;
     }
-
-    targetIndex = clamp(targetIndex, 0, COUNT - 1);
   }
 
   function onPointerUp(e) {
@@ -153,13 +203,11 @@ export function initMainGalleryMath({ mountEl }) {
   window.addEventListener("pointerup", onPointerUp, { passive: true });
   window.addEventListener("pointercancel", onPointerUp, { passive: true });
 
-  // ---------- core layout (100lostspecies logic) ----------
-  function layoutCard(mesh) {
-    const i = mesh.userData.index;
-    const offset = i - currentIndex;
+  // ---------- orbital layout core ----------
+  function layoutMesh(mesh, rowCfg, offset) {
     const absO = Math.abs(offset);
 
-    // windowing like 100lostspecies
+    // windowing: no tunnel
     if (absO > WINDOW + 0.2) {
       mesh.visible = false;
       return;
@@ -168,32 +216,65 @@ export function initMainGalleryMath({ mountEl }) {
 
     const isCenter = absO < 0.001;
 
-    // ✅ non-linear depth curve (more cinematic)
-    const depthFactor = Math.pow(absO, 1.25);
+    // Normalize offset to [-1..1] across window, then map to arc angle
+    const t = clamp(offset / WINDOW, -1, 1);
+    const ang = t * ARC_ANGLE; // orbital feel
 
-    const x = offset * SPACING_X;
-    const z = -depthFactor * DEPTH_STEP;
-    const y = -depthFactor * 28;
+    // Non-linear "attention" falloff (like cinematic)
+    const depthFactor = Math.pow(absO, rowCfg.depthPow);
 
-    // ✅ center stays "heavy"
-    let s = 1 - depthFactor * SCALE_STEP;
-    if (isCenter) s = 1.05;
+    // Orbital arc positioning:
+    // Center at z = -Z_CENTER (slightly towards camera), sides go deeper as angle grows.
+    const R = rowCfg.radius;
 
-    let op = 1 - depthFactor * OPACITY_STEP;
-    if (isCenter) op = 1;
+    const x = Math.sin(ang) * R;
 
-    s = clamp(s, 0.5, 1.05);
-    op = clamp(op, 0.04, 1);
+    // Circle with a forward shift so center isn't deep:
+    // z(0) = -Z_CENTER; z(edges) becomes much deeper -> orbital wrap feel.
+    const z = (-Math.cos(ang) * R) + (R - Z_CENTER) - depthFactor * 60;
 
-    // yaw adds depth feeling at edges
-    const yaw = clamp(-offset * 0.12, -0.42, 0.42);
+    // Slight vertical drop towards edges (adds sculpture feel)
+    const y = -depthFactor * 26;
+
+    // Scale/opacity falloff (rows differ)
+    let s = 1 - depthFactor * rowCfg.scaleStep;
+    let op = 1 - depthFactor * rowCfg.opacityStep;
+
+    // Heavy center (never dim)
+    if (isCenter) {
+      s = rowCfg.centerBoost;
+      op = 1;
+    }
+
+    s = clamp(s, 0.45, rowCfg.centerBoost);
+    op = clamp(op, 0.03, 1);
 
     mesh.position.set(x, y, z);
     mesh.scale.setScalar(s);
     mesh.material.opacity = op;
 
-    mesh.lookAt(camera.position);
-    mesh.rotation.y += yaw;
+    // Orientation: not fully billboard to camera.
+    // Use yaw from arc angle (tangent-ish) to feel "wrapping around viewer".
+    mesh.rotation.set(0, ang * 0.90, 0);
+
+    // Tiny extra yaw for drama at edges (optional, subtle)
+    mesh.rotation.y += clamp(-offset * 0.03, -0.12, 0.12);
+  }
+
+  function layoutAll() {
+    for (let r = 0; r < ROWS.length; r++) {
+      const rowCfg = ROWS[r];
+      const group = rowGroups[r];
+
+      for (const mesh of group.children) {
+        const i = mesh.userData.index;
+
+        // row phase / index shift (support rows feel offset)
+        const offset = (i + rowCfg.indexShift) - currentIndex;
+
+        layoutMesh(mesh, rowCfg, offset);
+      }
+    }
   }
 
   // ---------- resize ----------
@@ -207,17 +288,26 @@ export function initMainGalleryMath({ mountEl }) {
   window.addEventListener("resize", onResize);
   onResize();
 
-  // ---------- loop ----------
+  // ---------- animation loop (spring settle) ----------
   let last = performance.now();
   function tick(now) {
     const dt = Math.min((now - last) / 1000, 0.033);
     last = now;
 
-    // smooth follow
-    const t = 1 - Math.pow(1 - FOLLOW, dt * 60);
-    currentIndex = lerp(currentIndex, targetIndex, t);
+    // Spring towards integer targetIndex
+    // x'' + d*x' + k*(x-target)=0  (discrete integration)
+    const x = currentIndex;
+    const v = indexVel;
+    const target = targetIndex;
 
-    for (const c of cards) layoutCard(c);
+    const a = -SPRING_K * (x - target) - SPRING_D * v;
+    indexVel = v + a * dt;
+    currentIndex = x + indexVel * dt;
+
+    // Ensure no drifting beyond bounds
+    currentIndex = clamp(currentIndex, 0, COUNT - 1);
+
+    layoutAll();
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
