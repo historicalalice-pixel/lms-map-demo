@@ -29,16 +29,20 @@ export function initMainGalleryMath({ mountEl }) {
   // ---------- constants (100lostspecies-feel tuning) ----------
   const COUNT = 10;
 
-  // ✅ updated tuning (more dramatic, less "linear")
-  const SPACING_X = 420;   // was 380
-  const DEPTH_STEP = 420;  // was 340
-  const SCALE_STEP = 0.13; // was 0.10
-  const OPACITY_STEP = 0.32; // was 0.26
+  // spacing between neighbor cards
+  const SPACING_X = 420;
 
-  // window around center
+  // depth per step from center
+  const DEPTH_STEP = 420;
+
+  // scale / opacity falloff
+  const SCALE_STEP = 0.13;
+  const OPACITY_STEP = 0.32;
+
+  // visible window around center
   const WINDOW = 3; // offsets -3..+3 (7 cards max)
 
-  // easing follow
+  // easing follow (cinematic)
   const FOLLOW = 0.10;
 
   // ---------- card factory (simple canvas label) ----------
@@ -152,31 +156,37 @@ export function initMainGalleryMath({ mountEl }) {
   // ---------- core layout (100lostspecies logic) ----------
   function layoutCard(mesh) {
     const i = mesh.userData.index;
-
-    // offset relative to animated center
     const offset = i - currentIndex;
     const absO = Math.abs(offset);
 
-    // show only a small window around center
+    // windowing like 100lostspecies
     if (absO > WINDOW + 0.2) {
       mesh.visible = false;
       return;
     }
     mesh.visible = true;
 
-    // position
+    const isCenter = absO < 0.001;
+
+    // ✅ non-linear depth curve (more cinematic)
+    const depthFactor = Math.pow(absO, 1.25);
+
     const x = offset * SPACING_X;
-    const z = -absO * DEPTH_STEP;
+    const z = -depthFactor * DEPTH_STEP;
+    const y = -depthFactor * 28;
 
-    // slight vertical drop for edges
-    const y = -absO * 26;
+    // ✅ center stays "heavy"
+    let s = 1 - depthFactor * SCALE_STEP;
+    if (isCenter) s = 1.05;
 
-    // scale/opacity falloff
-    const s = clamp(1 - absO * SCALE_STEP, 0.55, 1.0);
-    const op = clamp(1 - absO * OPACITY_STEP, 0.06, 1.0);
+    let op = 1 - depthFactor * OPACITY_STEP;
+    if (isCenter) op = 1;
 
-    // tiny yaw for depth
-    const yaw = clamp(-offset * 0.11, -0.38, 0.38);
+    s = clamp(s, 0.5, 1.05);
+    op = clamp(op, 0.04, 1);
+
+    // yaw adds depth feeling at edges
+    const yaw = clamp(-offset * 0.12, -0.42, 0.42);
 
     mesh.position.set(x, y, z);
     mesh.scale.setScalar(s);
