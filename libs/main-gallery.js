@@ -2,11 +2,7 @@
 // 100lostspecies-inspired curved gallery engine (3 belts, inertia, parallax, snap).
 // This file ONLY handles 3D gallery logic (no DOM UI).
 
-// ✅ If you use local three file in /libs:
 import * as THREE from "./three.module.js";
-// ✅ If you use importmap CDN, replace the line above with:
-// import * as THREE from "three";
-
 import { GALLERY_ITEMS } from "./data.js";
 
 export function initMainGallery({ mountEl }) {
@@ -18,10 +14,19 @@ export function initMainGallery({ mountEl }) {
   const smooth01 = (t) => t * t * (3 - 2 * t); // smoothstep(0..1)
   const smoothstep = (a, b, x) => smooth01(clamp((x - a) / (b - a), 0, 1));
 
+  // Wrap angle to [-PI, PI]
+  const wrapPi = (a) => {
+    let x = a % (Math.PI * 2);
+    if (x > Math.PI) x -= Math.PI * 2;
+    if (x < -Math.PI) x += Math.PI * 2;
+    return x;
+  };
+
   // ---------------- renderer ----------------
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.setClearColor(0x000000, 0);
+
   mountEl.innerHTML = "";
   mountEl.appendChild(renderer.domElement);
   renderer.domElement.style.touchAction = "none";
@@ -41,47 +46,34 @@ export function initMainGallery({ mountEl }) {
   camera.position.set(0, 0, CAM_Z);
   camera.lookAt(0, 0, 0);
 
-  // We use MeshBasicMaterial (no lighting dependency) for stable visibility
-  // Add subtle fog for depth (optional but helps "museum space")
+  // Subtle fog for depth
   scene.fog = new THREE.Fog(0x060812, 1400, 2200);
 
   // ---------------- layout (world model) ----------------
-  // Card size & spacing: large cards + big step -> max ~4 readable in center
   const CARD_W = 340;
   const CARD_H = 220;
 
-  // Cylinder radii per row (small differences for depth feel)
   const R_MID = 980;
   const R_BOT = 1020;
   const R_TOP = 1060;
 
-  // Vertical positions: center 100%, bottom ~1/2 visible, top ~1/3 visible
   const Y_MID = 0;
-  const Y_BOT = -(CARD_H * 0.70); // ~half visible
-  const Y_TOP = +(CARD_H * 0.92); // ~third visible
+  const Y_BOT = -(CARD_H * 0.70);
+  const Y_TOP = +(CARD_H * 0.92);
 
-  // How many cards per ring (enough to never see an end)
   const COUNT = 36;
 
-  // Step along arc: (CARD + GAP) / radius => angle step
-  // Increase GAP to reduce density (fewer visible).
   const GAP = 190;
   const STEP_ANGLE_MID = (CARD_W + GAP) / R_MID;
   const STEP_ANGLE_BOT = (CARD_W + GAP) / R_BOT;
   const STEP_ANGLE_TOP = (CARD_W + GAP) / R_TOP;
 
-  // Visible sector and focus behavior:
-  // We fade based on ANGLE from camera forward axis (NOT z).
-  // Readable zone around center is about ±35..40 degrees => ~4 cards max.
-  const READABLE_DEG = 38; // target readable half-angle
+  const READABLE_DEG = 38;
   const READABLE_RAD = (READABLE_DEG * Math.PI) / 180;
 
-  // Outside readable zone we fade aggressively but never fully disappear (unless behind)
   const FADE_START = READABLE_RAD * 0.95;
   const FADE_END = READABLE_RAD * 1.65;
-
-  // We can cull far behind (optional), but keep some ambience.
-  const HARD_CULL = Math.PI * 0.92; // almost behind
+  const HARD_CULL = Math.PI * 0.92;
 
   // ---------------- texture factory (stable, visible) ----------------
   function makeCardTexture(title, subtitle, seed) {
@@ -133,7 +125,6 @@ export function initMainGallery({ mountEl }) {
 
     const tex = new THREE.CanvasTexture(c);
     tex.anisotropy = 8;
-    // keep safe across three versions:
     if ("SRGBColorSpace" in THREE) tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   }
@@ -158,29 +149,26 @@ export function initMainGallery({ mountEl }) {
     for (let i = 0; i < COUNT; i++) {
       const item = (GALLERY_ITEMS && GALLERY_ITEMS.length)
         ? GALLERY_ITEMS[i % GALLERY_ITEMS.length]
-        : { title: `Картка ${i+1}`, subtitle: "Модуль" };
+        : { title: `Картка ${i + 1}`, subtitle: "Модуль" };
 
-      const tex = makeCardTexture(item.title, item.subtitle, i * 991 + Math.floor((y + 999) * 10));
+      const tex = makeCardTexture(
+        item.title,
+        item.subtitle,
+        i * 991 + Math.floor((y + 999) * 10)
+      );
+
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
         opacity: 1,
         side: THREE.DoubleSide,
-        depthWrite: false, // avoid alpha z artifacts
+        depthWrite: false,
       });
 
       const mesh = new THREE.Mesh(planeGeo, mat);
-      mesh.userData = {
-        i,
-        radius,
-        stepAngle,
-        phase,
-        rowKind, // "mid" | "top" | "bot"
-      };
-
+      mesh.userData = { i, radius, stepAngle, phase, rowKind };
       group.add(mesh);
 
-      // subtle border glow plane
       const frame = new THREE.Mesh(
         new THREE.PlaneGeometry(CARD_W + 18, CARD_H + 18),
         new THREE.MeshBasicMaterial({
@@ -203,38 +191,63 @@ export function initMainGallery({ mountEl }) {
   const rowTop = createRow({ y: Y_TOP, radius: R_TOP, stepAngle: STEP_ANGLE_TOP, phase: 1.25, rowKind: "top" });
 
   // ---------------- motion state (inertia) ----------------
-  // scrollPos is an angle offset around the cylinder
   let scrollPos = 0;
   let vel = 0;
   let impulse = 0;
 
-  // Inertia numbers (from your TЗ):
-  // slow, heavy drift; stop ~1.5–2s
   const V_MAX = 0.028;
-  const IMPULSE_DECAY = 0.20; // impulse decays quickly
-  const DAMPING = 0.92;       // heavy damping per 60fps
+  const IMPULSE_DECAY = 0.20;
+  const DAMPING = 0.92;
   const AUTO_DRIFT = 0.000015;
 
-  // Drag state
   let down = false;
   let lastX = 0;
 
-  // Mouse parallax state (camera x/y only)
   let mx = 0, my = 0;
   let camX = 0, camY = 0;
 
-  // Snap (magnetic) state
-  const SNAP_THRESHOLD = 0.18 * V_MAX; // 18% of max speed
-  const SNAP_STRENGTH = 0.030;         // 0.02..0.05 (your TЗ)
-  const SNAP_DAMP = 0.90;              // 0.85..0.92 (your TЗ)
+  const SNAP_THRESHOLD = 0.18 * V_MAX;
+  const SNAP_STRENGTH = 0.030;
+  const SNAP_DAMP = 0.90;
 
-  // Parallax row speed multipliers (your TЗ #3)
   const SPEED_MID = 1.0;
   const SPEED_BOT = 0.85;
   const SPEED_TOP = 1.15;
 
-  // Micro vertical parallax from motion (very small)
   let microY = 0;
+
+  // ---------------- focus (simple) ----------------
+  let focusedIndex = 0;
+
+  function applyStyle(mesh, absA, rowKind, isFocused) {
+    // Hide almost behind
+    if (absA > HARD_CULL) {
+      mesh.visible = false;
+      return;
+    }
+    mesh.visible = true;
+
+    // opacity by angle
+    let op = 1;
+
+    if (absA > FADE_START) {
+      const t = smoothstep(FADE_START, FADE_END, absA);
+      op = lerp(1, 0.08, t);
+    }
+
+    // Row influence: middle more visible; top/bot always slightly dimmer
+    if (rowKind === "top") op *= 0.78;
+    if (rowKind === "bot") op *= 0.84;
+
+    // Focus boost
+    if (isFocused) op = Math.min(1, op * 1.15);
+
+    mesh.material.opacity = op;
+
+    // scale for depth
+    const s = lerp(1.00, 0.92, smoothstep(0, FADE_END, absA));
+    mesh.scale.setScalar(isFocused ? s * 1.05 : s);
+  }
 
   // ---------------- input ----------------
   function onMouseMove(e) {
@@ -242,134 +255,50 @@ export function initMainGallery({ mountEl }) {
     const nx = (e.clientX - r.left) / r.width;
     const ny = (e.clientY - r.top) / r.height;
     mx = (nx - 0.5) * 2;
-    my = (0.5 - ny) * 2; // up = +
+    my = (ny - 0.5) * 2;
   }
 
   function onWheel(e) {
-    e.preventDefault();
-    const d = clamp(e.deltaY, -120, 120);
-    // Wheel = impulse, very slow
-    impulse += d * 0.00022; // tune for "slow"
+    // smooth wheel -> impulse
+    const delta = clamp(e.deltaY, -120, 120);
+    impulse += (-delta) * 0.000035;
+    impulse = clamp(impulse, -V_MAX, V_MAX);
   }
 
   function onPointerDown(e) {
     down = true;
     lastX = e.clientX;
+    renderer.domElement.setPointerCapture?.(e.pointerId);
   }
 
   function onPointerMove(e) {
     if (!down) return;
     const dx = e.clientX - lastX;
     lastX = e.clientX;
-    // Drag = impulse (slow)
-    impulse += (-dx) * 0.00006;
+
+    // drag -> impulse
+    impulse += dx * 0.00006;
+    impulse = clamp(impulse, -V_MAX, V_MAX);
+
+    // drag up (vertical) slight microY
+    if (typeof e.movementY === "number") {
+      microY = clamp(microY + (-e.movementY) * 0.0006, -0.22, 0.22);
+    }
   }
 
-  function onPointerUp() {
+  function onPointerUp(e) {
     down = false;
+    renderer.domElement.releasePointerCapture?.(e.pointerId);
   }
 
   window.addEventListener("mousemove", onMouseMove, { passive: true });
-  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+  renderer.domElement.addEventListener("wheel", onWheel, { passive: true });
   window.addEventListener("pointerdown", onPointerDown, { passive: true });
   window.addEventListener("pointermove", onPointerMove, { passive: true });
   window.addEventListener("pointerup", onPointerUp, { passive: true });
   window.addEventListener("pointercancel", onPointerUp, { passive: true });
 
-  // ---------------- focus & visibility (ANGLE-BASED, not z-based) ----------------
-  // Define "center axis": the ray from origin to camera (inside cylinder).
-  // A card at angle 'a' is centered when its angular position aligns to camera forward axis.
-  //
-  // We'll place cards on cylinder:
-  // position = (sin(theta)*R, 0, cos(theta)*R)
-  // and we want the "front" to be around theta ~= 0 (z positive, x ~0).
-  //
-  // IMPORTANT: visibility depends on |wrappedAngle(theta)|, not on z.
-  function wrapPi(a) {
-    // wrap angle into [-PI, PI]
-    a = (a + Math.PI) % (2 * Math.PI);
-    if (a < 0) a += 2 * Math.PI;
-    return a - Math.PI;
-  }
-
-  function applyStyle(mesh, absAngle, rowKind, isFocused) {
-    // absAngle: 0 at center, grows to sides
-
-    // Fade by angle:
-    // - 0..FADE_START => strong visibility
-    // - FADE_START..FADE_END => fade
-    // - > FADE_END => low
-    const tFade = 1 - smoothstep(FADE_START, FADE_END, absAngle); // 1 near center, 0 at far
-
-    // Row hierarchy (your TЗ)
-    let baseOpacity = 1.0;
-    let baseScale = 1.0;
-
-    if (rowKind === "mid") {
-      baseOpacity = 1.0;
-      baseScale = 1.0;
-    } else if (rowKind === "bot") {
-      baseOpacity = 0.82;
-      baseScale = 0.92;
-    } else if (rowKind === "top") {
-      baseOpacity = 0.65;
-      baseScale = 0.88;
-    }
-
-    // Focus model (snap target):
-    // - focused slightly bigger & more opaque
-    const focusBoost = isFocused ? 1.10 : 1.00;
-    const focusOpacityBoost = isFocused ? 1.00 : 0.96;
-
-    // Final opacity never becomes 0 (avoid "looks broken")
-    const minO = (rowKind === "mid") ? 0.10 : 0.06;
-    const maxO = baseOpacity * focusOpacityBoost;
-
-    const opacity = lerp(minO, maxO, tFade);
-    mesh.material.opacity = opacity;
-
-    // Scale: bigger near center; focused gets extra
-    const minS = baseScale * 0.78;
-    const maxS = baseScale * 1.06 * focusBoost;
-    const s = lerp(minS, maxS, tFade);
-    mesh.scale.setScalar(s);
-
-    // Optional hard cull far behind (performance + no weird back)
-    mesh.visible = absAngle < HARD_CULL;
-  }
-
-  // Compute nearest snap target for mid row:
-  // We snap scrollPos so that some card lands exactly at center (absAngle=0).
-  function nearestSnapTarget() {
-    // For mid row: theta_i = i*step + scrollPos*speed + phase
-    // Center happens when theta_i is closest to 0 (mod 2pi).
-    // We solve for scrollPos that makes theta_i == 0:
-    // scrollPos = -(i*step + phase)/speed
-    //
-    // Choose i giving minimal absAngle at current scrollPos.
-    const step = STEP_ANGLE_MID;
-    const phase = 0.35;
-
-    let bestI = 0;
-    let bestAbs = Infinity;
-
-    for (let i = 0; i < COUNT; i++) {
-      const theta = i * step + scrollPos * SPEED_MID + phase;
-      const a = wrapPi(theta);
-      const aa = Math.abs(a);
-      if (aa < bestAbs) {
-        bestAbs = aa;
-        bestI = i;
-      }
-    }
-
-    const target = -(bestI * step + phase) / SPEED_MID;
-    return { target, index: bestI };
-  }
-
-  let focusedIndex = 0;
-
-  // ---------------- place cards ----------------
+  // ---------------- row update ----------------
   function updateRow(group, speedMul, rowKind, phaseOverride = null) {
     for (const mesh of group.children) {
       if (!mesh.isMesh) continue;
@@ -383,16 +312,15 @@ export function initMainGallery({ mountEl }) {
       const a = wrapPi(theta);
       const absA = Math.abs(a);
 
-      // Position on inner cylinder
+      // ✅ FIX: place cards in front of camera (camera at +Z looks toward 0, so we need -Z hemisphere)
       const x = Math.sin(theta) * R;
-      const z = Math.cos(theta) * R;
+      const z = -Math.cos(theta) * R; // <-- ключове виправлення
       mesh.position.set(x, 0, z);
 
-      // Face camera (billboard-ish)
+      // Face camera
       mesh.lookAt(camera.position.x, camera.position.y - group.position.y, camera.position.z);
 
-      // Slight edge rotation for perspective feel (your TЗ #3)
-      // (tiny, to avoid "technical")
+      // Slight edge rotation for perspective feel
       mesh.rotation.y += (-a) * 0.10;
 
       const isFocused = (rowKind === "mid" && i === focusedIndex);
@@ -417,50 +345,55 @@ export function initMainGallery({ mountEl }) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
 
-    // --- input -> velocity ---
+    // input -> velocity
     vel += impulse;
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
 
-    // clamp speed
     vel = clamp(vel, -V_MAX, V_MAX);
 
-    // inertia damping
+    // auto drift
+    vel += AUTO_DRIFT * (dt * 60);
+
+    // damping
     vel *= Math.pow(DAMPING, dt * 60);
 
-    // subtle drift
-    vel += AUTO_DRIFT;
+    // snap when slow and not dragging
+    if (!down && Math.abs(vel) < SNAP_THRESHOLD) {
+      // find closest index by aligning angle near center
+      // Since cards are placed by theta = i*step + scrollPos + phase, snapping scrollPos to make some i centered.
+      // we use mid row parameters for snap
+      const step = STEP_ANGLE_MID;
+      const phase = 0.35;
 
-    // --- snap logic ---
-    const snap = nearestSnapTarget();
-    focusedIndex = snap.index;
+      // current "center" corresponds to theta ~ 0 (a ~ 0)
+      // theta_i = i*step + scrollPos + phase
+      // want theta_i = 0 => scrollPos = -(i*step + phase)
+      const approxI = Math.round((-(scrollPos + phase)) / step);
+      focusedIndex = ((approxI % COUNT) + COUNT) % COUNT;
 
-    const canSnap = (!down && Math.abs(vel) < SNAP_THRESHOLD);
-    if (canSnap) {
-      const dist = (snap.target - scrollPos);
-      // spring to target (no bounce)
-      vel += dist * SNAP_STRENGTH;
-      vel *= Math.pow(SNAP_DAMP, dt * 60);
+      const target = -(focusedIndex * step + phase);
+      const diff = wrapPi(target - scrollPos);
+
+      vel = (vel + diff * SNAP_STRENGTH) * SNAP_DAMP;
     }
 
     // integrate
-    scrollPos += vel;
+    scrollPos += vel * (dt * 60);
 
-    // --- camera parallax (very gentle) ---
-    camX = lerp(camX, mx * 26, 1 - Math.pow(0.86, dt * 60));
-    camY = lerp(camY, my * 14, 1 - Math.pow(0.86, dt * 60));
+    // camera parallax
+    const targetCamX = mx * 26;
+    const targetCamY = -my * 18 + microY * 40;
+    camX = lerp(camX, targetCamX, 0.06);
+    camY = lerp(camY, targetCamY, 0.06);
 
-    // micro Y parallax based on speed (very subtle, museum feel)
-    microY = lerp(microY, clamp(vel * 420, -8, 8), 1 - Math.pow(0.88, dt * 60));
-
-    camera.position.set(camX, camY, CAM_Z);
+    camera.position.x = camX;
+    camera.position.y = camY;
     camera.lookAt(0, 0, 0);
 
-    // row micro Y separation (tiny)
-    rowTop.position.y = Y_TOP + (-microY * 0.6);   // top drifts slightly down
-    rowBot.position.y = Y_BOT + ( microY * 0.6);   // bottom drifts slightly up
-    rowMid.position.y = Y_MID;
+    // decay microY
+    microY = lerp(microY, 0, 0.06);
 
-    // update rows with parallax multipliers
+    // update rows
     updateRow(rowMid, SPEED_MID, "mid");
     updateRow(rowBot, SPEED_BOT, "bot");
     updateRow(rowTop, SPEED_TOP, "top");
@@ -470,7 +403,7 @@ export function initMainGallery({ mountEl }) {
   }
   requestAnimationFrame(tick);
 
-  // ---------------- cleanup ----------------
+  // ------------
   return {
     destroy() {
       window.removeEventListener("resize", onResize);
