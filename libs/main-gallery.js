@@ -1,10 +1,4 @@
 // libs/main-gallery.js
-// Variant 1 (як 100lostspecies по керуванню):
-// ✅ Нема дрейфу (idle = стоїть)
-// ✅ Рух тільки wheel/drag
-// ✅ 3 ряди СИНХРОННІ (без "рваності")
-// ✅ Камера В СЕРЕДИНІ сцени, картки орбітять НАВКОЛО нас
-
 import * as THREE from "three";
 import { GALLERY_ITEMS } from "./data.js";
 
@@ -23,6 +17,12 @@ export function initMainGallery({ mountEl }) {
     return a - Math.PI;
   }
 
+  // exponential smoothing (cinematic)
+  function expSmooth(current, target, lambda, dt) {
+    const t = 1 - Math.exp(-lambda * dt);
+    return current + (target - current) * t;
+  }
+
   // ---------------- renderer ----------------
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -36,41 +36,39 @@ export function initMainGallery({ mountEl }) {
 
   const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 5000);
 
-  // ✅ FIX #1: камера в центрі
   const CAM_Z = 0;
   camera.position.set(0, 0, CAM_Z);
-  // важливо: камера не може lookAt у власну позицію
   camera.lookAt(0, 0, -1);
 
-  scene.fog = new THREE.Fog(0x060812, 1400, 2200);
+  scene.fog = new THREE.Fog(0x060812, 1200, 2200);
 
   // ---------------- layout ----------------
-  const CARD_W = 340;
-  const CARD_H = 220;
+  // ✅ Правка #1: більше “повітря” між картками і рядами (як white ref)
+  const CARD_W = 300;
+  const CARD_H = 190;
 
   const R_MID = 980;
   const R_BOT = 1020;
   const R_TOP = 1060;
 
   const Y_MID = 0;
-  const Y_BOT = -(CARD_H * 0.70);
-  const Y_TOP = +(CARD_H * 0.92);
+  const ROW_SEP = CARD_H * 0.78; // було щільно; тепер ближче до white ref
+  const Y_BOT = -ROW_SEP;
+  const Y_TOP = +ROW_SEP;
 
   const COUNT = 36;
 
-  // ✅ ONE shared step for ALL rows (sync)
-  const GAP = 190;
+  const GAP = 260; // ⬅⬅ більше відстань між картками по колу (white ref)
   const STEP_ANGLE = (CARD_W + GAP) / R_MID;
 
-  // ✅ One shared baseline phase
   const PHASE_ALL = 0.35;
 
   // visibility / fade
-  const READABLE_DEG = 38;
+  const READABLE_DEG = 42;
   const READABLE_RAD = (READABLE_DEG * Math.PI) / 180;
   const FADE_START = READABLE_RAD * 0.95;
-  const FADE_END = READABLE_RAD * 1.65;
-  const HARD_CULL = Math.PI * 0.92;
+  const FADE_END = READABLE_RAD * 1.85;
+  const HARD_CULL = Math.PI * 0.95;
 
   // ---------------- textures ----------------
   function mulberry32(a) {
@@ -166,12 +164,13 @@ export function initMainGallery({ mountEl }) {
       mesh.userData = { i, radius, rowKind, phaseOffset };
       group.add(mesh);
 
+      // рамка (лінії)
       const frame = new THREE.Mesh(
-        new THREE.PlaneGeometry(CARD_W + 18, CARD_H + 18),
+        new THREE.PlaneGeometry(CARD_W + 16, CARD_H + 16),
         new THREE.MeshBasicMaterial({
           color: 0xffffff,
           transparent: true,
-          opacity: 0.08,
+          opacity: 0.075,
           side: THREE.DoubleSide,
           depthWrite: false,
         })
@@ -183,13 +182,13 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  // small phase offsets (тільки фазка, не швидкість) — still synced by index axis
+  // 3 ряди, синхронні по руху, тільки різні фази
   const rowMid = createRow({ y: Y_MID, radius: R_MID, rowKind: "mid", phaseOffset: 0.00 });
   const rowBot = createRow({ y: Y_BOT, radius: R_BOT, rowKind: "bot", phaseOffset: 0.20 });
   const rowTop = createRow({ y: Y_TOP, radius: R_TOP, rowKind: "top", phaseOffset: 0.38 });
 
   // ---------------- motion ----------------
-  let scrollPos = 0; // radians
+  let scrollPos = 0;
   let vel = 0;
   let impulse = 0;
 
@@ -197,14 +196,15 @@ export function initMainGallery({ mountEl }) {
   const IMPULSE_DECAY = 0.20;
   const DAMPING = 0.92;
 
-  const AUTO_DRIFT = 0; // ✅ Variant 1 (нема дрейфу)
+  const AUTO_DRIFT = 0; // Variant 1: drift = 0
 
   // drag
   let down = false;
   let lastX = 0;
 
-  // camera parallax (в середині сцени — дуже мала амплітуда)
+  // ✅ Правка #2: cinematic mouse
   let mx = 0, my = 0;
+  let mxSm = 0, mySm = 0;
   let camX = 0, camY = 0;
 
   // snap
@@ -262,20 +262,20 @@ export function initMainGallery({ mountEl }) {
     if (rowKind === "mid") {
       baseOpacity = 1.0; baseScale = 1.0;
     } else if (rowKind === "bot") {
-      baseOpacity = 0.82; baseScale = 0.92;
+      baseOpacity = 0.80; baseScale = 0.92;
     } else {
-      baseOpacity = 0.65; baseScale = 0.88;
+      baseOpacity = 0.62; baseScale = 0.88;
     }
 
-    const focusBoost = isFocused ? 1.10 : 1.00;
+    const focusBoost = isFocused ? 1.06 : 1.00;
     const focusOpacityBoost = isFocused ? 1.00 : 0.96;
 
-    const minO = rowKind === "mid" ? 0.10 : 0.06;
+    const minO = rowKind === "mid" ? 0.12 : 0.07;
     const maxO = baseOpacity * focusOpacityBoost;
     mesh.material.opacity = lerp(minO, maxO, tFade);
 
-    const minS = baseScale * 0.78;
-    const maxS = baseScale * 1.06 * focusBoost;
+    const minS = baseScale * 0.80;
+    const maxS = baseScale * 1.05 * focusBoost;
     mesh.scale.setScalar(lerp(minS, maxS, tFade));
 
     mesh.visible = absAngle < HARD_CULL;
@@ -312,24 +312,21 @@ export function initMainGallery({ mountEl }) {
       const phaseOffset = mesh.userData.phaseOffset || 0;
       const rowKind = mesh.userData.rowKind;
 
-      // ✅ synced index axis
       const theta = i * STEP_ANGLE + scrollPos + PHASE_ALL + phaseOffset;
 
       const a = wrapPi(theta);
       const absA = Math.abs(a);
 
       const x = Math.sin(theta) * R;
-
-      // ✅ FIX #3: інвертуємо Z, щоб “внутрішній” вигляд був правильний
       const z = -Math.cos(theta) * R;
 
       mesh.position.set(x, 0, z);
 
-      // ✅ FIX #2: картка дивиться в центр сцени (а не в камеру)
+      // face the center
       mesh.lookAt(0, 0, 0);
 
-      // slight curvature feel
-      mesh.rotation.y += -a * 0.10;
+      // subtle yaw modulation
+      mesh.rotation.y += -a * 0.08;
 
       const isFocused = rowKind === "mid" && i === focusedIndex;
       applyStyle(mesh, absA, rowKind, isFocused);
@@ -361,7 +358,6 @@ export function initMainGallery({ mountEl }) {
     vel = clamp(vel, -V_MAX, V_MAX);
     vel *= Math.pow(DAMPING, dt * 60);
 
-    // ✅ no drift
     vel += AUTO_DRIFT;
 
     // snap
@@ -377,18 +373,23 @@ export function initMainGallery({ mountEl }) {
 
     scrollPos += vel;
 
-    // camera micro parallax (дуже легкий)
-    camX = lerp(camX, mx * 10, 1 - Math.pow(0.86, dt * 60));
-    camY = lerp(camY, my * 6, 1 - Math.pow(0.86, dt * 60));
+    // ✅ cinematic mouse (slow + small)
+    mxSm = expSmooth(mxSm, mx, 1.4, dt);  // повільніше
+    mySm = expSmooth(mySm, my, 1.4, dt);
 
-    microY = lerp(microY, clamp(vel * 420, -8, 8), 1 - Math.pow(0.88, dt * 60));
+    const targetCamX = mxSm * 5.0; // менша амплітуда
+    const targetCamY = mySm * 3.0;
 
-    // ✅ камера лишається в центрі, тільки мікро зміщення X/Y
+    camX = expSmooth(camX, targetCamX, 1.2, dt);
+    camY = expSmooth(camY, targetCamY, 1.2, dt);
+
+    microY = expSmooth(microY, clamp(vel * 340, -6, 6), 2.0, dt);
+
     camera.position.set(camX, camY, CAM_Z);
     camera.lookAt(0, 0, -1);
 
-    rowTop.position.y = Y_TOP + -microY * 0.6;
-    rowBot.position.y = Y_BOT + microY * 0.6;
+    rowTop.position.y = Y_TOP + -microY * 0.5;
+    rowBot.position.y = Y_BOT + microY * 0.5;
     rowMid.position.y = Y_MID;
 
     updateRow(rowMid);
@@ -396,25 +397,48 @@ export function initMainGallery({ mountEl }) {
     updateRow(rowTop);
 
     renderer.render(scene, camera);
-    requestAnimationFrame(tick);
+    rafId = requestAnimationFrame(tick);
   }
 
-  requestAnimationFrame(tick);
+  let rafId = requestAnimationFrame(tick);
+
+  // ---------------- cleanup ----------------
+  function disposeRow(group) {
+    group.traverse((obj) => {
+      if (!obj.isMesh) return;
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        }
+      }
+    });
+  }
 
   return {
     destroy() {
+      cancelAnimationFrame(rafId);
+
       window.removeEventListener("resize", onResize);
       window.removeEventListener("mousemove", onMouseMove);
       renderer.domElement.removeEventListener("wheel", onWheel);
+
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
+
+      disposeRow(rowMid);
+      disposeRow(rowBot);
+      disposeRow(rowTop);
+
       renderer.dispose();
-      mountEl.innerHTML = "";
+
+      if (renderer.domElement && renderer.domElement.parentNode) {
+        renderer.domElement.parentNode.removeChild(renderer.domElement);
+      }
     },
   };
 }
-
-// ✅ compatibility export (so your main.html can keep importing initMainGalleryMath)
-export const initMainGalleryMath = initMainGallery;
