@@ -42,9 +42,10 @@ export function initMainGallery({ mountEl }) {
   const CARD_H = 210;
 
   // Put belts reasonably close so they are visible without guesswork
-  const R_MID = 720;
-  const R_BOT = 760;
-  const R_TOP = 800;
+const R_MID = 1100;
+const R_BOT = 1140;
+const R_TOP = 1180;
+
 
   const Y_MID = 0;
   const Y_BOT = -(CARD_H * 0.70);
@@ -58,8 +59,8 @@ export function initMainGallery({ mountEl }) {
   const STEP_TOP = (CARD_W + GAP) / R_TOP;
 
   // readable window
-  const FADE_START = (36 * Math.PI) / 180;
-  const FADE_END = (62 * Math.PI) / 180;
+  const FADE_START = (22 * Math.PI) / 180;
+  const FADE_END = (40 * Math.PI) / 180;
   const HARD_CULL = Math.PI * 0.92;
 
   // ---------- textures ----------
