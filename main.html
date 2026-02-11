@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LMS | Main Gallery</title>
+  <title>LMS | Main</title>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&display=swap');
@@ -13,9 +13,6 @@
       --bg1:#070a14;
       --text:#e8eefc;
       --muted: rgba(232,238,252,.70);
-      --line: rgba(232,238,252,.10);
-
-      --hero: #f3eed7;
     }
 
     *{ box-sizing:border-box; }
@@ -37,7 +34,7 @@
       z-index: 1;
     }
 
-    /* subtle vignette like cinematic */
+    /* subtle vignette */
     .vignette{
       position: fixed; inset: 0;
       pointer-events:none;
@@ -47,56 +44,6 @@
       mix-blend-mode: multiply;
     }
 
-    /* overlay UI */
-    #overlay{
-      position: fixed;
-      inset: 0;
-      z-index: 3;
-      pointer-events: none;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      text-align:center;
-      padding: 5vw;
-    }
-
-    .hero{
-      pointer-events:none;
-      max-width: 1100px;
-      width: min(1100px, 92vw);
-    }
-
-    .hero h1{
-      font-family: "Cormorant Garamond", serif;
-      font-weight: 500;
-      font-size: clamp(44px, 6vw, 86px);
-      margin: 0 0 14px;
-      letter-spacing: .02em;
-      color: rgba(243,238,215,.95);
-      text-shadow: 0 14px 55px rgba(0,0,0,.45);
-    }
-
-    .hero p{
-      margin: 0;
-      color: rgba(232,238,252,.72);
-      font-size: 15px;
-      line-height: 1.6;
-      letter-spacing: .02em;
-    }
-
-    /* bottom hint */
-    .hint{
-      position: fixed;
-      left: 18px;
-      bottom: 14px;
-      z-index: 3;
-      font-size: 12px;
-      color: rgba(232,238,252,.55);
-      pointer-events:none;
-      user-select:none;
-    }
-
-    /* small top-right badge */
     .badge{
       position: fixed;
       right: 18px;
@@ -112,31 +59,40 @@
       user-select:none;
       backdrop-filter: blur(10px);
     }
+
+    .hint{
+      position: fixed;
+      left: 18px;
+      bottom: 14px;
+      z-index: 3;
+      font-size: 12px;
+      color: rgba(232,238,252,.55);
+      pointer-events:none;
+      user-select:none;
+    }
   </style>
+
+  <!-- ✅ Three.js безкоштовно з CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
 </head>
 
 <body>
   <div id="gallery3d" aria-hidden="true"></div>
   <div class="vignette" aria-hidden="true"></div>
 
-  <div id="overlay">
-    <div class="hero">
-      <h1>Галерея курсу</h1>
-      <p>Колесо миші — переміщення. Далі додамо “занурення”, інерцію, snap, клік і відкриття картки як у 100lostspecies.</p>
-    </div>
-  </div>
-
   <div class="badge">WebGL • Three.js</div>
-  <div class="hint">Wheel → move</div>
+  <div class="hint">Wheel — плавний рух • Drag — керування • Drag up — 3-тя стрічка</div>
 
   <script type="module">
     import { initMainGallery } from "./libs/main-gallery.js";
-
     const mountEl = document.getElementById("gallery3d");
-    const overlayEl = document.getElementById("overlay");
-
-    // стартуємо
-    initMainGallery({ mountEl, overlayEl });
+    initMainGallery({ mountEl });
   </script>
 </body>
 </html>
