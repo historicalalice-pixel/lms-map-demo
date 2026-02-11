@@ -1,11 +1,10 @@
 // libs/main-gallery.js
-// 100lostspecies-like prototype:
+// 100lostspecies-like prototype (fixed):
 // - INTRO -> ORBIT "dolly-in" feel
-// - camera is the center; cards orbit around you
-// - gentle AUTO DRIFT always on (like 100lostspecies)
-// - wheel/drag overrides, then drift returns
-// - 3 rows driven by one currentIndex
-// Uses Three.js via importmap: "three"
+// - YOU are inside: camera settles at z=0, orbit center slightly ahead
+// - 3 rows driven by ONE currentIndex (no indexShift => no ragged rows)
+// - support rows differ by PHASE (angle offset), radius, opacity/scale
+// - gentle auto-drift + user override (returns like 100lostspecies)
 
 import * as THREE from "three";
 
@@ -30,95 +29,86 @@ export function initMainGalleryMath({ mountEl }) {
   // ---------- scene/camera ----------
   const scene = new THREE.Scene();
 
-  // We look along -Z (classic "in front" direction)
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 8000);
-  camera.position.set(0, 0, 1600);          // INTRO start (far)
-  camera.lookAt(0, 0, camera.position.z - 1);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 9000);
+  camera.position.set(0, 0, 1600); // INTRO start (far)
+  camera.lookAt(0, 0, -1);
 
   // ---------- content ----------
   const COUNT = 10;
 
-  // ---------- windowing ----------
-  // 100lostspecies never shows too much at once.
-  const WINDOW_MID = 3; // master row visible offsets: -3..+3
-  const WINDOW_SUP = 2; // support rows visible offsets: -2..+2
+  // ---------- orbit / inside-scene framing ----------
+  // We place the ORBIT CENTER slightly ahead of the camera in -Z.
+  // After INTRO, camera.z ~ 0, orbit center ~ -ORBIT_CENTER_AHEAD.
+  const ORBIT_CENTER_AHEAD = 520;
 
-  // ---------- arc / orbit ----------
-  // Angle step between neighbor cards around you.
-  // Smaller = tighter pack. Bigger = more spacing around orbit.
-  const STEP_ANGLE = (20 * Math.PI) / 180; // ~20deg
+  // Neighbor spacing around orbit (angle step per index)
+  const STEP_ANGLE = (22 * Math.PI) / 180; // adjust later if needed
 
-  // Radii per row (support slightly larger -> feels more "around")
+  // Visible windows
+  const WINDOW_MID = 3;
+  const WINDOW_SUP = 2;
+
+  // ---------- rows (NO index shift; only angle phase) ----------
   const ROWS = [
     {
       kind: "top",
       y: +210,
-      radius: 1180,
+      radius: 1320,
       window: WINDOW_SUP,
+      phase: +0.35, // ✅ phase shift (not index shift)
       depthPow: 1.35,
-      scaleStep: 0.18,
-      opacityStep: 0.48,
+      scaleStep: 0.20,
+      opacityStep: 0.52,
       centerBoost: 1.01,
-      indexShift: +1,
     },
     {
       kind: "mid",
       y: 0,
-      radius: 1080,
+      radius: 1200,
       window: WINDOW_MID,
+      phase: 0.0,
       depthPow: 1.25,
       scaleStep: 0.14,
       opacityStep: 0.36,
-      centerBoost: 1.07,
-      indexShift: 0,
+      centerBoost: 1.08,
     },
     {
       kind: "bot",
       y: -210,
-      radius: 1220,
+      radius: 1380,
       window: WINDOW_SUP,
+      phase: -0.55, // ✅ phase shift (not index shift)
       depthPow: 1.38,
-      scaleStep: 0.19,
-      opacityStep: 0.50,
+      scaleStep: 0.21,
+      opacityStep: 0.54,
       centerBoost: 1.01,
-      indexShift: -2,
     },
   ];
 
   // ---------- drift like 100lostspecies ----------
-  // This is key: drift is slow, constant, "alive".
-  // ~0.11 index/sec => 1 card about every 9 seconds (gentle).
-  const DRIFT_INDEX_PER_SEC = 0.11;
-
-  // After user input, drift fades down then returns smoothly.
+  const DRIFT_INDEX_PER_SEC = 0.11; // ~1 card / 9 sec
   const DRIFT_PAUSE_SEC = 1.1;
   const DRIFT_RETURN_SEC = 1.6;
 
-  // Wheel/drag influence strength
-  const WHEEL_STEP = 1;       // one wheel notch -> one card
-  const DRAG_STEP_PX = 120;   // drag threshold -> one card
+  // ---------- spring motion ----------
+  const SPRING_K = 55;
+  const SPRING_D = 15.5;
 
-  // ---------- motion (spring settle like mass) ----------
-  // currentIndex follows targetIndex with spring dynamics (heavy but controlled)
-  const SPRING_K = 55;     // stiffness
-  const SPRING_D = 15.5;   // damping
-
-  let targetIndex = 0;
-  let currentIndex = 0;
+  let targetIndex = 0;    // discrete from user
+  let currentIndex = 0;   // continuous
   let indexVel = 0;
 
-  // We keep drift as a slowly increasing "targetIndex" over time.
   let driftAccum = 0;
   let lastInputAt = performance.now() / 1000;
 
-  // INTRO -> ORBIT transition
+  // ---------- INTRO -> ORBIT ----------
   let mode = "INTRO";
-  const INTRO_DUR = 1.35;               // seconds
+  const INTRO_DUR = 1.35;
   const INTRO_Z_FROM = 1600;
-  const INTRO_Z_TO = 920;
+  const INTRO_Z_TO = 0; // ✅ camera ends at center
   let introT = 0;
 
-  // ---------- card texture ----------
+  // ---------- card visuals (temporary labels) ----------
   function makeLabelTexture(text, subtitle) {
     const w = 640, h = 420;
     const c = document.createElement("canvas");
@@ -148,8 +138,8 @@ export function initMainGalleryMath({ mountEl }) {
 
   const cardGeo = new THREE.PlaneGeometry(340, 220);
 
-  // Create 3 row groups
-  const rowGroups = ROWS.map((row, rIdx) => {
+  // 3 row groups
+  const rowGroups = ROWS.map((row) => {
     const group = new THREE.Group();
     group.position.y = row.y;
     scene.add(group);
@@ -169,7 +159,7 @@ export function initMainGalleryMath({ mountEl }) {
       });
 
       const mesh = new THREE.Mesh(cardGeo, mat);
-      mesh.userData = { index: i, row: rIdx };
+      mesh.userData = { index: i };
       group.add(mesh);
     }
 
@@ -189,7 +179,7 @@ export function initMainGalleryMath({ mountEl }) {
     const dy = e.deltaY;
     if (Math.abs(dy) < 2) return;
     markUserInput();
-    stepTarget(dy > 0 ? +WHEEL_STEP : -WHEEL_STEP);
+    stepTarget(dy > 0 ? +1 : -1);
   }
 
   let down = false;
@@ -206,19 +196,22 @@ export function initMainGalleryMath({ mountEl }) {
 
   function onPointerMove(e) {
     if (!down) return;
+
     const dx = e.clientX - lastX;
     lastX = e.clientX;
     dragAcc += dx;
 
-    while (dragAcc > DRAG_STEP_PX) {
+    const STEP_PX = 120;
+
+    while (dragAcc > STEP_PX) {
       markUserInput();
-      stepTarget(-1); // drag right -> previous
-      dragAcc -= DRAG_STEP_PX;
+      stepTarget(-1);
+      dragAcc -= STEP_PX;
     }
-    while (dragAcc < -DRAG_STEP_PX) {
+    while (dragAcc < -STEP_PX) {
       markUserInput();
-      stepTarget(+1); // drag left -> next
-      dragAcc += DRAG_STEP_PX;
+      stepTarget(+1);
+      dragAcc += STEP_PX;
     }
   }
 
@@ -233,11 +226,10 @@ export function initMainGalleryMath({ mountEl }) {
   window.addEventListener("pointerup", onPointerUp, { passive: true });
   window.addEventListener("pointercancel", onPointerUp, { passive: true });
 
-  // ---------- layout (cards orbit around the camera) ----------
-  function layoutMesh(mesh, rowCfg, offset, camPos) {
+  // ---------- layout (inside-scene orbit) ----------
+  function layoutMesh(mesh, rowCfg, offset, orbitCenter) {
     const absO = Math.abs(offset);
 
-    // windowing
     if (absO > rowCfg.window + 0.15) {
       mesh.visible = false;
       return;
@@ -246,51 +238,49 @@ export function initMainGalleryMath({ mountEl }) {
 
     const isCenter = absO < 0.001;
 
-    // Non-linear attention falloff
     const d = Math.pow(absO, rowCfg.depthPow);
 
-    // Orbit angle: around YOU
-    const ang = offset * STEP_ANGLE;
+    // ✅ PHASE on angle (not on index)
+    const ang = (offset + rowCfg.phase) * STEP_ANGLE;
 
-    // Center of orbit = camera position
-    // ang=0 => in front of camera (negative Z direction)
+    // Orbit around orbitCenter (you are near the center)
     const R = rowCfg.radius;
-    const x = camPos.x + Math.sin(ang) * R;
-    const z = camPos.z - Math.cos(ang) * R;
+    const x = orbitCenter.x + Math.sin(ang) * R;
+    const z = orbitCenter.z - Math.cos(ang) * R;
 
-    // additional depth push for edges (makes them disappear quicker)
-    const z2 = z - d * 85;
+    // Push edges deeper so they disappear faster
+    const z2 = z - d * 110;
 
-    // vertical drop a bit towards edges
-    const y = -d * 26;
+    // Vertical drop towards edges
+    const yLocal = -d * 28;
 
-    // scale / opacity (support rows harsher)
     let s = 1 - d * rowCfg.scaleStep;
     let op = 1 - d * rowCfg.opacityStep;
 
-    // heavy center
     if (isCenter) {
       s = rowCfg.centerBoost;
       op = 1;
     }
 
-    s = clamp(s, 0.42, rowCfg.centerBoost);
+    s = clamp(s, 0.40, rowCfg.centerBoost);
     op = clamp(op, 0.02, 1);
 
-    mesh.position.set(x, y, z2);
+    mesh.position.set(x, yLocal, z2);
     mesh.scale.setScalar(s);
     mesh.material.opacity = op;
 
-    // Orientation: tangent-ish to orbit (critical for "I'm inside")
-    // Facing direction depends on ang: rotate so it "wraps" around you.
+    // Tangent-ish orientation (wrap around you)
     mesh.rotation.set(0, ang * 0.95, 0);
-
-    // small extra yaw for drama
     mesh.rotation.y += clamp(-offset * 0.02, -0.10, 0.10);
   }
 
   function layoutAll() {
-    const camPos = camera.position;
+    // ✅ Orbit center is slightly ahead of the camera
+    const orbitCenter = new THREE.Vector3(
+      camera.position.x,
+      0,
+      camera.position.z - ORBIT_CENTER_AHEAD
+    );
 
     for (let r = 0; r < ROWS.length; r++) {
       const rowCfg = ROWS[r];
@@ -299,11 +289,8 @@ export function initMainGalleryMath({ mountEl }) {
 
       for (const mesh of group.children) {
         const i = mesh.userData.index;
-
-        // Phase shift for support rows (like parallax)
-        const offset = (i + rowCfg.indexShift) - currentIndex;
-
-        layoutMesh(mesh, rowCfg, offset, camPos);
+        const offset = i - currentIndex; // ✅ same for all rows (no ragged rows)
+        layoutMesh(mesh, rowCfg, offset, orbitCenter);
       }
     }
   }
@@ -326,22 +313,21 @@ export function initMainGalleryMath({ mountEl }) {
     const dt = Math.min((now - last) / 1000, 0.033);
     last = now;
 
-    // INTRO dolly-in to make "we dive inside"
+    // INTRO dolly-in
     if (mode === "INTRO") {
       introT += dt;
       const u = clamp(introT / INTRO_DUR, 0, 1);
       const eased = smoothstep(0, 1, u);
 
       camera.position.z = lerp(INTRO_Z_FROM, INTRO_Z_TO, eased);
-      camera.lookAt(0, 0, camera.position.z - 1);
+      camera.lookAt(0, 0, -1);
 
       if (u >= 1) mode = "ORBIT";
     } else {
-      // camera stays stable in ORBIT (centered experience)
-      camera.lookAt(0, 0, camera.position.z - 1);
+      camera.lookAt(0, 0, -1);
     }
 
-    // Drift control: after input we pause then return
+    // Drift multiplier: pause after input, then return smoothly
     const tSec = now / 1000;
     const sinceInput = tSec - lastInputAt;
 
@@ -353,31 +339,27 @@ export function initMainGalleryMath({ mountEl }) {
       driftMul = smoothstep(0, 1, r);
     }
 
-    // Apply drift into targetIndex (continuous)
+    // Apply drift to target (continuous), but keep bounds
     driftAccum += DRIFT_INDEX_PER_SEC * driftMul * dt;
+    const driftedTarget = clamp(targetIndex + driftAccum, 0, COUNT - 1);
 
-    // We add drift to target, but keep inside bounds:
-    // drift is subtle; user steps are discrete.
-    const drifted = clamp(targetIndex + driftAccum, 0, COUNT - 1);
-
-    // Spring towards drifted target
+    // Spring towards driftedTarget
     const x = currentIndex;
     const v = indexVel;
-    const target = drifted;
+    const target = driftedTarget;
 
     const a = -SPRING_K * (x - target) - SPRING_D * v;
     indexVel = v + a * dt;
     currentIndex = x + indexVel * dt;
     currentIndex = clamp(currentIndex, 0, COUNT - 1);
 
-    // When we hit bounds, bleed velocity (avoid jitter)
+    // Bleed velocity at bounds
     if (currentIndex <= 0.0001 || currentIndex >= COUNT - 1 - 0.0001) {
       indexVel *= 0.6;
     }
 
     layoutAll();
     renderer.render(scene, camera);
-
     requestAnimationFrame(tick);
   }
 
