@@ -1,15 +1,10 @@
 // libs/main-gallery.js
-// 100lostspecies-inspired curved gallery engine (3 belts, inertia, parallax, snap).
-// Variant 1:
-//   ✅ NO auto drift (static when idle)
-//   ✅ move only via wheel/drag
-//   ✅ rows are SYNCED (no "ripped rows")
+// Variant 1 (як 100lostspecies по керуванню):
+// ✅ Нема дрейфу (idle = стоїть)
+// ✅ Рух тільки wheel/drag
+// ✅ 3 ряди СИНХРОННІ (без "рваності")
 
-// IMPORTANT:
-// Your /libs/three.module.js in the zip is EMPTY (0 bytes).
-// So we MUST import Three via importmap CDN from main.html:
 import * as THREE from "three";
-
 import { GALLERY_ITEMS } from "./data.js";
 
 export function initMainGallery({ mountEl }) {
@@ -39,8 +34,6 @@ export function initMainGallery({ mountEl }) {
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 5000);
-
-  // Fixed camera Z — no zoom / no fly-away
   const CAM_Z = 920;
   camera.position.set(0, 0, CAM_Z);
   camera.lookAt(0, 0, 0);
@@ -61,23 +54,21 @@ export function initMainGallery({ mountEl }) {
 
   const COUNT = 36;
 
-  // ✅ ONE shared step angle => synced columns across rows
+  // ✅ ONE shared step for ALL rows (sync)
   const GAP = 190;
   const STEP_ANGLE = (CARD_W + GAP) / R_MID;
 
-  // ✅ ONE shared phase baseline (rows can have small offsets, but NOT speed differences)
+  // ✅ One shared baseline phase (rows may add tiny offsets, but no speed differences)
   const PHASE_ALL = 0.35;
 
-  // readability window
+  // visibility / fade
   const READABLE_DEG = 38;
   const READABLE_RAD = (READABLE_DEG * Math.PI) / 180;
-
   const FADE_START = READABLE_RAD * 0.95;
   const FADE_END = READABLE_RAD * 1.65;
-
   const HARD_CULL = Math.PI * 0.92;
 
-  // ---------------- texture factory ----------------
+  // ---------------- textures ----------------
   function mulberry32(a) {
     return function () {
       let t = (a += 0x6d2b79f5);
@@ -88,11 +79,9 @@ export function initMainGallery({ mountEl }) {
   }
 
   function makeCardTexture(title, subtitle, seed) {
-    const w = 768,
-      h = 512;
+    const w = 768, h = 512;
     const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
+    c.width = w; c.height = h;
     const g = c.getContext("2d");
 
     g.fillStyle = "rgba(9,12,22,1)";
@@ -190,13 +179,13 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  // Small phase offsets are OK (visual variety) because step & scroll are shared.
+  // small phase offsets = OK (visual variety), still synced by index axis
   const rowMid = createRow({ y: Y_MID, radius: R_MID, rowKind: "mid", phaseOffset: 0.00 });
   const rowBot = createRow({ y: Y_BOT, radius: R_BOT, rowKind: "bot", phaseOffset: 0.20 });
   const rowTop = createRow({ y: Y_TOP, radius: R_TOP, rowKind: "top", phaseOffset: 0.38 });
 
-  // ---------------- motion state ----------------
-  let scrollPos = 0;
+  // ---------------- motion ----------------
+  let scrollPos = 0; // radians
   let vel = 0;
   let impulse = 0;
 
@@ -204,17 +193,17 @@ export function initMainGallery({ mountEl }) {
   const IMPULSE_DECAY = 0.20;
   const DAMPING = 0.92;
 
-  // ✅ Variant 1: no drift
-  const AUTO_DRIFT = 0;
+  const AUTO_DRIFT = 0; // ✅ Variant 1
 
+  // drag
   let down = false;
   let lastX = 0;
 
-  let mx = 0,
-    my = 0;
-  let camX = 0,
-    camY = 0;
+  // camera parallax
+  let mx = 0, my = 0;
+  let camX = 0, camY = 0;
 
+  // snap
   const SNAP_THRESHOLD = 0.18 * V_MAX;
   const SNAP_STRENGTH = 0.030;
   const SNAP_DAMP = 0.90;
@@ -267,14 +256,11 @@ export function initMainGallery({ mountEl }) {
     let baseScale = 1.0;
 
     if (rowKind === "mid") {
-      baseOpacity = 1.0;
-      baseScale = 1.0;
+      baseOpacity = 1.0; baseScale = 1.0;
     } else if (rowKind === "bot") {
-      baseOpacity = 0.82;
-      baseScale = 0.92;
-    } else if (rowKind === "top") {
-      baseOpacity = 0.65;
-      baseScale = 0.88;
+      baseOpacity = 0.82; baseScale = 0.92;
+    } else {
+      baseOpacity = 0.65; baseScale = 0.88;
     }
 
     const focusBoost = isFocused ? 1.10 : 1.00;
@@ -282,7 +268,6 @@ export function initMainGallery({ mountEl }) {
 
     const minO = rowKind === "mid" ? 0.10 : 0.06;
     const maxO = baseOpacity * focusOpacityBoost;
-
     mesh.material.opacity = lerp(minO, maxO, tFade);
 
     const minS = baseScale * 0.78;
@@ -294,7 +279,6 @@ export function initMainGallery({ mountEl }) {
 
   // ---------------- snap ----------------
   function nearestSnapTarget() {
-    // theta_i = i*STEP + scrollPos + PHASE_ALL  (shared for all rows)
     let bestI = 0;
     let bestAbs = Infinity;
 
@@ -324,7 +308,7 @@ export function initMainGallery({ mountEl }) {
       const phaseOffset = mesh.userData.phaseOffset || 0;
       const rowKind = mesh.userData.rowKind;
 
-      // ✅ synced index axis:
+      // ✅ synced index axis
       const theta = i * STEP_ANGLE + scrollPos + PHASE_ALL + phaseOffset;
 
       const a = wrapPi(theta);
@@ -334,10 +318,10 @@ export function initMainGallery({ mountEl }) {
       const z = Math.cos(theta) * R;
       mesh.position.set(x, 0, z);
 
-      // Face camera
+      // face camera
       mesh.lookAt(camera.position.x, camera.position.y - group.position.y, camera.position.z);
 
-      // subtle edge rotation
+      // slight curvature feel
       mesh.rotation.y += -a * 0.10;
 
       const isFocused = rowKind === "mid" && i === focusedIndex;
@@ -358,10 +342,12 @@ export function initMainGallery({ mountEl }) {
 
   // ---------------- loop ----------------
   let lastT = performance.now();
+
   function tick(now) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
 
+    // integrate impulse
     vel += impulse;
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
 
@@ -371,6 +357,7 @@ export function initMainGallery({ mountEl }) {
     // ✅ no drift
     vel += AUTO_DRIFT;
 
+    // snap
     const snap = nearestSnapTarget();
     focusedIndex = snap.index;
 
@@ -403,9 +390,9 @@ export function initMainGallery({ mountEl }) {
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
   }
+
   requestAnimationFrame(tick);
 
-  // ---------------- cleanup ----------------
   return {
     destroy() {
       window.removeEventListener("resize", onResize);
@@ -420,3 +407,6 @@ export function initMainGallery({ mountEl }) {
     },
   };
 }
+
+// ✅ compatibility export (so your main.html can keep importing initMainGalleryMath)
+export const initMainGalleryMath = initMainGallery;
