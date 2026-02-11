@@ -3,6 +3,7 @@
 // ✅ Нема дрейфу (idle = стоїть)
 // ✅ Рух тільки wheel/drag
 // ✅ 3 ряди СИНХРОННІ (без "рваності")
+// ✅ Камера В СЕРЕДИНІ сцени, картки орбітять НАВКОЛО нас
 
 import * as THREE from "three";
 import { GALLERY_ITEMS } from "./data.js";
@@ -34,9 +35,12 @@ export function initMainGallery({ mountEl }) {
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 5000);
-  const CAM_Z = 920;
+
+  // ✅ FIX #1: камера в центрі
+  const CAM_Z = 0;
   camera.position.set(0, 0, CAM_Z);
-  camera.lookAt(0, 0, 0);
+  // важливо: камера не може lookAt у власну позицію
+  camera.lookAt(0, 0, -1);
 
   scene.fog = new THREE.Fog(0x060812, 1400, 2200);
 
@@ -58,7 +62,7 @@ export function initMainGallery({ mountEl }) {
   const GAP = 190;
   const STEP_ANGLE = (CARD_W + GAP) / R_MID;
 
-  // ✅ One shared baseline phase (rows may add tiny offsets, but no speed differences)
+  // ✅ One shared baseline phase
   const PHASE_ALL = 0.35;
 
   // visibility / fade
@@ -179,7 +183,7 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  // small phase offsets = OK (visual variety), still synced by index axis
+  // small phase offsets (тільки фазка, не швидкість) — still synced by index axis
   const rowMid = createRow({ y: Y_MID, radius: R_MID, rowKind: "mid", phaseOffset: 0.00 });
   const rowBot = createRow({ y: Y_BOT, radius: R_BOT, rowKind: "bot", phaseOffset: 0.20 });
   const rowTop = createRow({ y: Y_TOP, radius: R_TOP, rowKind: "top", phaseOffset: 0.38 });
@@ -193,13 +197,13 @@ export function initMainGallery({ mountEl }) {
   const IMPULSE_DECAY = 0.20;
   const DAMPING = 0.92;
 
-  const AUTO_DRIFT = 0; // ✅ Variant 1
+  const AUTO_DRIFT = 0; // ✅ Variant 1 (нема дрейфу)
 
   // drag
   let down = false;
   let lastX = 0;
 
-  // camera parallax
+  // camera parallax (в середині сцени — дуже мала амплітуда)
   let mx = 0, my = 0;
   let camX = 0, camY = 0;
 
@@ -315,11 +319,14 @@ export function initMainGallery({ mountEl }) {
       const absA = Math.abs(a);
 
       const x = Math.sin(theta) * R;
-      const z = Math.cos(theta) * R;
+
+      // ✅ FIX #3: інвертуємо Z, щоб “внутрішній” вигляд був правильний
+      const z = -Math.cos(theta) * R;
+
       mesh.position.set(x, 0, z);
 
-      // face camera
-      mesh.lookAt(camera.position.x, camera.position.y - group.position.y, camera.position.z);
+      // ✅ FIX #2: картка дивиться в центр сцени (а не в камеру)
+      mesh.lookAt(0, 0, 0);
 
       // slight curvature feel
       mesh.rotation.y += -a * 0.10;
@@ -370,14 +377,15 @@ export function initMainGallery({ mountEl }) {
 
     scrollPos += vel;
 
-    // camera parallax
-    camX = lerp(camX, mx * 26, 1 - Math.pow(0.86, dt * 60));
-    camY = lerp(camY, my * 14, 1 - Math.pow(0.86, dt * 60));
+    // camera micro parallax (дуже легкий)
+    camX = lerp(camX, mx * 10, 1 - Math.pow(0.86, dt * 60));
+    camY = lerp(camY, my * 6, 1 - Math.pow(0.86, dt * 60));
 
     microY = lerp(microY, clamp(vel * 420, -8, 8), 1 - Math.pow(0.88, dt * 60));
 
+    // ✅ камера лишається в центрі, тільки мікро зміщення X/Y
     camera.position.set(camX, camY, CAM_Z);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(0, 0, -1);
 
     rowTop.position.y = Y_TOP + -microY * 0.6;
     rowBot.position.y = Y_BOT + microY * 0.6;
