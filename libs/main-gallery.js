@@ -1,10 +1,10 @@
 // libs/main-gallery.js
-// 100lostspecies-style prototype:
-// - index-based (targetIndex/currentIndex)
-// - spring settle (mass feel)
-// - orbital arc motion around camera (not "rails")
-// - 3 rows (middle master + top/bot support) driven by one currentIndex
-// - windowing (no tunnel)
+// 100lostspecies-like prototype:
+// - INTRO -> ORBIT "dolly-in" feel
+// - camera is the center; cards orbit around you
+// - gentle AUTO DRIFT always on (like 100lostspecies)
+// - wheel/drag overrides, then drift returns
+// - 3 rows driven by one currentIndex
 // Uses Three.js via importmap: "three"
 
 import * as THREE from "three";
@@ -14,6 +14,9 @@ export function initMainGalleryMath({ mountEl }) {
 
   // ---------- helpers ----------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth01 = (t) => t * t * (3 - 2 * t);
+  const smoothstep = (a, b, x) => smooth01(clamp((x - a) / (b - a), 0, 1));
 
   // ---------- renderer ----------
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -27,84 +30,112 @@ export function initMainGalleryMath({ mountEl }) {
   // ---------- scene/camera ----------
   const scene = new THREE.Scene();
 
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 6000);
-  camera.position.set(0, 0, 1100);
-  camera.lookAt(0, 0, 0);
+  // We look along -Z (classic "in front" direction)
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 8000);
+  camera.position.set(0, 0, 1600);          // INTRO start (far)
+  camera.lookAt(0, 0, camera.position.z - 1);
 
   // ---------- content ----------
   const COUNT = 10;
 
-  // ---------- "100lostspecies feel" core params ----------
-  const WINDOW = 3; // show offsets -3..+3 per row
+  // ---------- windowing ----------
+  // 100lostspecies never shows too much at once.
+  const WINDOW_MID = 3; // master row visible offsets: -3..+3
+  const WINDOW_SUP = 2; // support rows visible offsets: -2..+2
 
-  // Arc feel: cards "wrap" around viewer
-  // We'll map offsets to an angle range [-ARC_ANGLE..+ARC_ANGLE]
-  const ARC_ANGLE = (52 * Math.PI) / 180; // ~±52deg across window
+  // ---------- arc / orbit ----------
+  // Angle step between neighbor cards around you.
+  // Smaller = tighter pack. Bigger = more spacing around orbit.
+  const STEP_ANGLE = (20 * Math.PI) / 180; // ~20deg
 
-  // Put center card slightly in front of origin (negative Z), not too deep
-  const Z_CENTER = 130;
-
-  // Spring settle for cinematic motion
-  // (tuned to feel "heavy" but responsive)
-  const SPRING_K = 52;    // stiffness
-  const SPRING_D = 14.5;  // damping
-
-  // ---------- rows (middle = master, top/bot = support) ----------
+  // Radii per row (support slightly larger -> feels more "around")
   const ROWS = [
     {
       kind: "top",
       y: +210,
-      radius: 1150,
-      scaleStep: 0.16,
-      opacityStep: 0.40,
-      depthPow: 1.30,
-      centerBoost: 1.02,
-      indexShift: +1, // phase
+      radius: 1180,
+      window: WINDOW_SUP,
+      depthPow: 1.35,
+      scaleStep: 0.18,
+      opacityStep: 0.48,
+      centerBoost: 1.01,
+      indexShift: +1,
     },
     {
       kind: "mid",
       y: 0,
       radius: 1080,
+      window: WINDOW_MID,
+      depthPow: 1.25,
       scaleStep: 0.14,
       opacityStep: 0.36,
-      depthPow: 1.25,
-      centerBoost: 1.06,
+      centerBoost: 1.07,
       indexShift: 0,
     },
     {
       kind: "bot",
       y: -210,
-      radius: 1200,
-      scaleStep: 0.17,
-      opacityStep: 0.42,
-      depthPow: 1.32,
+      radius: 1220,
+      window: WINDOW_SUP,
+      depthPow: 1.38,
+      scaleStep: 0.19,
+      opacityStep: 0.50,
       centerBoost: 1.01,
-      indexShift: -2, // phase
+      indexShift: -2,
     },
   ];
 
-  // ---------- card factory (simple labels for now) ----------
+  // ---------- drift like 100lostspecies ----------
+  // This is key: drift is slow, constant, "alive".
+  // ~0.11 index/sec => 1 card about every 9 seconds (gentle).
+  const DRIFT_INDEX_PER_SEC = 0.11;
+
+  // After user input, drift fades down then returns smoothly.
+  const DRIFT_PAUSE_SEC = 1.1;
+  const DRIFT_RETURN_SEC = 1.6;
+
+  // Wheel/drag influence strength
+  const WHEEL_STEP = 1;       // one wheel notch -> one card
+  const DRAG_STEP_PX = 120;   // drag threshold -> one card
+
+  // ---------- motion (spring settle like mass) ----------
+  // currentIndex follows targetIndex with spring dynamics (heavy but controlled)
+  const SPRING_K = 55;     // stiffness
+  const SPRING_D = 15.5;   // damping
+
+  let targetIndex = 0;
+  let currentIndex = 0;
+  let indexVel = 0;
+
+  // We keep drift as a slowly increasing "targetIndex" over time.
+  let driftAccum = 0;
+  let lastInputAt = performance.now() / 1000;
+
+  // INTRO -> ORBIT transition
+  let mode = "INTRO";
+  const INTRO_DUR = 1.35;               // seconds
+  const INTRO_Z_FROM = 1600;
+  const INTRO_Z_TO = 920;
+  let introT = 0;
+
+  // ---------- card texture ----------
   function makeLabelTexture(text, subtitle) {
     const w = 640, h = 420;
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
     const g = c.getContext("2d");
 
-    // base
     g.fillStyle = "rgba(18,22,35,1)";
     g.fillRect(0, 0, w, h);
 
-    // border
     g.strokeStyle = "rgba(240,240,255,0.20)";
     g.lineWidth = 6;
     g.strokeRect(18, 18, w - 36, h - 36);
 
-    // title
     g.fillStyle = "rgba(240,240,255,0.92)";
     g.font = "700 46px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
     g.fillText(text, 44, 98);
 
-    // subtitle
     g.fillStyle = "rgba(240,240,255,0.55)";
     g.font = "500 26px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
     g.fillText(subtitle, 44, 140);
@@ -117,7 +148,7 @@ export function initMainGalleryMath({ mountEl }) {
 
   const cardGeo = new THREE.PlaneGeometry(340, 220);
 
-  // Build meshes: rowGroups[rowIndex].children[i] corresponds to card i
+  // Create 3 row groups
   const rowGroups = ROWS.map((row, rIdx) => {
     const group = new THREE.Group();
     group.position.y = row.y;
@@ -126,7 +157,7 @@ export function initMainGalleryMath({ mountEl }) {
     for (let i = 0; i < COUNT; i++) {
       const tex = makeLabelTexture(
         `Card ${i + 1}`,
-        rIdx === 1 ? "master row" : "support row"
+        row.kind === "mid" ? "master row" : "support row"
       );
 
       const mat = new THREE.MeshBasicMaterial({
@@ -138,19 +169,18 @@ export function initMainGalleryMath({ mountEl }) {
       });
 
       const mesh = new THREE.Mesh(cardGeo, mat);
-      mesh.userData = { index: i };
+      mesh.userData = { index: i, row: rIdx };
       group.add(mesh);
     }
 
     return group;
   });
 
-  // ---------- state (index-based) ----------
-  let targetIndex = 0;     // integer steps
-  let currentIndex = 0;    // continuous
-  let indexVel = 0;        // spring velocity
-
   // ---------- input ----------
+  function markUserInput() {
+    lastInputAt = performance.now() / 1000;
+  }
+
   function stepTarget(dir) {
     targetIndex = clamp(targetIndex + dir, 0, COUNT - 1);
   }
@@ -158,7 +188,8 @@ export function initMainGalleryMath({ mountEl }) {
   function onWheel(e) {
     const dy = e.deltaY;
     if (Math.abs(dy) < 2) return;
-    stepTarget(dy > 0 ? +1 : -1);
+    markUserInput();
+    stepTarget(dy > 0 ? +WHEEL_STEP : -WHEEL_STEP);
   }
 
   let down = false;
@@ -169,26 +200,25 @@ export function initMainGalleryMath({ mountEl }) {
     down = true;
     lastX = e.clientX;
     dragAcc = 0;
+    markUserInput();
     renderer.domElement.setPointerCapture?.(e.pointerId);
   }
 
   function onPointerMove(e) {
     if (!down) return;
-
     const dx = e.clientX - lastX;
     lastX = e.clientX;
     dragAcc += dx;
 
-    // Drag threshold -> discrete steps (like curated nav)
-    const STEP_PX = 120;
-
-    while (dragAcc > STEP_PX) {
+    while (dragAcc > DRAG_STEP_PX) {
+      markUserInput();
       stepTarget(-1); // drag right -> previous
-      dragAcc -= STEP_PX;
+      dragAcc -= DRAG_STEP_PX;
     }
-    while (dragAcc < -STEP_PX) {
+    while (dragAcc < -DRAG_STEP_PX) {
+      markUserInput();
       stepTarget(+1); // drag left -> next
-      dragAcc += STEP_PX;
+      dragAcc += DRAG_STEP_PX;
     }
   }
 
@@ -203,12 +233,12 @@ export function initMainGalleryMath({ mountEl }) {
   window.addEventListener("pointerup", onPointerUp, { passive: true });
   window.addEventListener("pointercancel", onPointerUp, { passive: true });
 
-  // ---------- orbital layout core ----------
-  function layoutMesh(mesh, rowCfg, offset) {
+  // ---------- layout (cards orbit around the camera) ----------
+  function layoutMesh(mesh, rowCfg, offset, camPos) {
     const absO = Math.abs(offset);
 
-    // windowing: no tunnel
-    if (absO > WINDOW + 0.2) {
+    // windowing
+    if (absO > rowCfg.window + 0.15) {
       mesh.visible = false;
       return;
     }
@@ -216,63 +246,64 @@ export function initMainGalleryMath({ mountEl }) {
 
     const isCenter = absO < 0.001;
 
-    // Normalize offset to [-1..1] across window, then map to arc angle
-    const t = clamp(offset / WINDOW, -1, 1);
-    const ang = t * ARC_ANGLE; // orbital feel
+    // Non-linear attention falloff
+    const d = Math.pow(absO, rowCfg.depthPow);
 
-    // Non-linear "attention" falloff (like cinematic)
-    const depthFactor = Math.pow(absO, rowCfg.depthPow);
+    // Orbit angle: around YOU
+    const ang = offset * STEP_ANGLE;
 
-    // Orbital arc positioning:
-    // Center at z = -Z_CENTER (slightly towards camera), sides go deeper as angle grows.
+    // Center of orbit = camera position
+    // ang=0 => in front of camera (negative Z direction)
     const R = rowCfg.radius;
+    const x = camPos.x + Math.sin(ang) * R;
+    const z = camPos.z - Math.cos(ang) * R;
 
-    const x = Math.sin(ang) * R;
+    // additional depth push for edges (makes them disappear quicker)
+    const z2 = z - d * 85;
 
-    // Circle with a forward shift so center isn't deep:
-    // z(0) = -Z_CENTER; z(edges) becomes much deeper -> orbital wrap feel.
-    const z = (-Math.cos(ang) * R) + (R - Z_CENTER) - depthFactor * 60;
+    // vertical drop a bit towards edges
+    const y = -d * 26;
 
-    // Slight vertical drop towards edges (adds sculpture feel)
-    const y = -depthFactor * 26;
+    // scale / opacity (support rows harsher)
+    let s = 1 - d * rowCfg.scaleStep;
+    let op = 1 - d * rowCfg.opacityStep;
 
-    // Scale/opacity falloff (rows differ)
-    let s = 1 - depthFactor * rowCfg.scaleStep;
-    let op = 1 - depthFactor * rowCfg.opacityStep;
-
-    // Heavy center (never dim)
+    // heavy center
     if (isCenter) {
       s = rowCfg.centerBoost;
       op = 1;
     }
 
-    s = clamp(s, 0.45, rowCfg.centerBoost);
-    op = clamp(op, 0.03, 1);
+    s = clamp(s, 0.42, rowCfg.centerBoost);
+    op = clamp(op, 0.02, 1);
 
-    mesh.position.set(x, y, z);
+    mesh.position.set(x, y, z2);
     mesh.scale.setScalar(s);
     mesh.material.opacity = op;
 
-    // Orientation: not fully billboard to camera.
-    // Use yaw from arc angle (tangent-ish) to feel "wrapping around viewer".
-    mesh.rotation.set(0, ang * 0.90, 0);
+    // Orientation: tangent-ish to orbit (critical for "I'm inside")
+    // Facing direction depends on ang: rotate so it "wraps" around you.
+    mesh.rotation.set(0, ang * 0.95, 0);
 
-    // Tiny extra yaw for drama at edges (optional, subtle)
-    mesh.rotation.y += clamp(-offset * 0.03, -0.12, 0.12);
+    // small extra yaw for drama
+    mesh.rotation.y += clamp(-offset * 0.02, -0.10, 0.10);
   }
 
   function layoutAll() {
+    const camPos = camera.position;
+
     for (let r = 0; r < ROWS.length; r++) {
       const rowCfg = ROWS[r];
       const group = rowGroups[r];
+      group.position.y = rowCfg.y;
 
       for (const mesh of group.children) {
         const i = mesh.userData.index;
 
-        // row phase / index shift (support rows feel offset)
+        // Phase shift for support rows (like parallax)
         const offset = (i + rowCfg.indexShift) - currentIndex;
 
-        layoutMesh(mesh, rowCfg, offset);
+        layoutMesh(mesh, rowCfg, offset, camPos);
       }
     }
   }
@@ -288,30 +319,68 @@ export function initMainGalleryMath({ mountEl }) {
   window.addEventListener("resize", onResize);
   onResize();
 
-  // ---------- animation loop (spring settle) ----------
+  // ---------- loop ----------
   let last = performance.now();
+
   function tick(now) {
     const dt = Math.min((now - last) / 1000, 0.033);
     last = now;
 
-    // Spring towards integer targetIndex
-    // x'' + d*x' + k*(x-target)=0  (discrete integration)
+    // INTRO dolly-in to make "we dive inside"
+    if (mode === "INTRO") {
+      introT += dt;
+      const u = clamp(introT / INTRO_DUR, 0, 1);
+      const eased = smoothstep(0, 1, u);
+
+      camera.position.z = lerp(INTRO_Z_FROM, INTRO_Z_TO, eased);
+      camera.lookAt(0, 0, camera.position.z - 1);
+
+      if (u >= 1) mode = "ORBIT";
+    } else {
+      // camera stays stable in ORBIT (centered experience)
+      camera.lookAt(0, 0, camera.position.z - 1);
+    }
+
+    // Drift control: after input we pause then return
+    const tSec = now / 1000;
+    const sinceInput = tSec - lastInputAt;
+
+    let driftMul = 1;
+    if (sinceInput < DRIFT_PAUSE_SEC) {
+      driftMul = 0;
+    } else {
+      const r = clamp((sinceInput - DRIFT_PAUSE_SEC) / DRIFT_RETURN_SEC, 0, 1);
+      driftMul = smoothstep(0, 1, r);
+    }
+
+    // Apply drift into targetIndex (continuous)
+    driftAccum += DRIFT_INDEX_PER_SEC * driftMul * dt;
+
+    // We add drift to target, but keep inside bounds:
+    // drift is subtle; user steps are discrete.
+    const drifted = clamp(targetIndex + driftAccum, 0, COUNT - 1);
+
+    // Spring towards drifted target
     const x = currentIndex;
     const v = indexVel;
-    const target = targetIndex;
+    const target = drifted;
 
     const a = -SPRING_K * (x - target) - SPRING_D * v;
     indexVel = v + a * dt;
     currentIndex = x + indexVel * dt;
-
-    // Ensure no drifting beyond bounds
     currentIndex = clamp(currentIndex, 0, COUNT - 1);
 
-    layoutAll();
+    // When we hit bounds, bleed velocity (avoid jitter)
+    if (currentIndex <= 0.0001 || currentIndex >= COUNT - 1 - 0.0001) {
+      indexVel *= 0.6;
+    }
 
+    layoutAll();
     renderer.render(scene, camera);
+
     requestAnimationFrame(tick);
   }
+
   requestAnimationFrame(tick);
 
   return {
