@@ -26,32 +26,27 @@ export function initMainGalleryMath({ mountEl }) {
   camera.position.set(0, 0, 1100);
   camera.lookAt(0, 0, 0);
 
-  // ---------- constants (this is the "model") ----------
+  // ---------- constants (100lostspecies-feel tuning) ----------
   const COUNT = 10;
 
-  // spacing on X between neighbor cards (center-to-center)
-  const SPACING_X = 380;
+  // ✅ updated tuning (more dramatic, less "linear")
+  const SPACING_X = 420;   // was 380
+  const DEPTH_STEP = 420;  // was 340
+  const SCALE_STEP = 0.13; // was 0.10
+  const OPACITY_STEP = 0.32; // was 0.26
 
-  // depth per step from center (how quickly it goes "into" the screen)
-  const DEPTH_STEP = 340;
+  // window around center
+  const WINDOW = 3; // offsets -3..+3 (7 cards max)
 
-  // scale falloff per offset
-  const SCALE_STEP = 0.10;
-
-  // opacity falloff per offset
-  const OPACITY_STEP = 0.26;
-
-  // how many cards to keep alive around center (like their "window")
-  const WINDOW = 3; // shows offsets -3..+3 => 7 cards max
-
-  // easing for index following target
+  // easing follow
   const FOLLOW = 0.10;
 
   // ---------- card factory (simple canvas label) ----------
   function makeLabelTexture(text) {
     const w = 640, h = 420;
     const c = document.createElement("canvas");
-    c.width = w; c.height = h;
+    c.width = w;
+    c.height = h;
     const g = c.getContext("2d");
 
     // background
@@ -100,11 +95,10 @@ export function initMainGalleryMath({ mountEl }) {
   }
 
   // ---------- state ----------
-  let targetIndex = 0;   // the "desired" center card
-  let currentIndex = 0;  // eased towards targetIndex
+  let targetIndex = 0;
+  let currentIndex = 0;
 
   // ---------- controls ----------
-  // Wheel: step by +/-1, no inertia physics – just controlled stepping
   function onWheel(e) {
     const dy = e.deltaY;
     if (Math.abs(dy) < 2) return;
@@ -112,7 +106,6 @@ export function initMainGalleryMath({ mountEl }) {
     targetIndex = clamp(targetIndex, 0, COUNT - 1);
   }
 
-  // Drag: accumulate dx and convert into index steps
   let down = false;
   let lastX = 0;
   let dragAcc = 0;
@@ -126,19 +119,19 @@ export function initMainGalleryMath({ mountEl }) {
 
   function onPointerMove(e) {
     if (!down) return;
+
     const dx = e.clientX - lastX;
     lastX = e.clientX;
-
     dragAcc += dx;
 
-    // every ~110px drag => step 1 index
     const STEP_PX = 110;
+
     while (dragAcc > STEP_PX) {
-      targetIndex -= 1; // dragging right should move left
+      targetIndex -= 1; // drag right -> previous
       dragAcc -= STEP_PX;
     }
     while (dragAcc < -STEP_PX) {
-      targetIndex += 1; // dragging left should move right
+      targetIndex += 1; // drag left -> next
       dragAcc += STEP_PX;
     }
 
@@ -156,42 +149,39 @@ export function initMainGalleryMath({ mountEl }) {
   window.addEventListener("pointerup", onPointerUp, { passive: true });
   window.addEventListener("pointercancel", onPointerUp, { passive: true });
 
-  // ---------- layout function (THE CORE) ----------
+  // ---------- core layout (100lostspecies logic) ----------
   function layoutCard(mesh) {
     const i = mesh.userData.index;
 
-    // offset relative to animated center (this is the whole trick)
+    // offset relative to animated center
     const offset = i - currentIndex;
     const absO = Math.abs(offset);
 
-    // only keep a small window visible (like 100lostspecies)
+    // show only a small window around center
     if (absO > WINDOW + 0.2) {
       mesh.visible = false;
       return;
     }
     mesh.visible = true;
 
-    // target transforms from offset
+    // position
     const x = offset * SPACING_X;
-
-    // go into the screen as you move away from center
     const z = -absO * DEPTH_STEP;
 
-    // slight "arc" feel without cylinder math: drop a bit on Y towards edges
-    const y = -absO * 24;
+    // slight vertical drop for edges
+    const y = -absO * 26;
 
-    // scale + opacity falloff
-    const s = clamp(1 - absO * SCALE_STEP, 0.6, 1.0);
-    const op = clamp(1 - absO * OPACITY_STEP, 0.08, 1.0);
+    // scale/opacity falloff
+    const s = clamp(1 - absO * SCALE_STEP, 0.55, 1.0);
+    const op = clamp(1 - absO * OPACITY_STEP, 0.06, 1.0);
 
-    // tiny yaw so edges feel angled
-    const yaw = clamp(-offset * 0.10, -0.35, 0.35);
+    // tiny yaw for depth
+    const yaw = clamp(-offset * 0.11, -0.38, 0.38);
 
     mesh.position.set(x, y, z);
     mesh.scale.setScalar(s);
     mesh.material.opacity = op;
 
-    // face camera, then apply a controlled yaw
     mesh.lookAt(camera.position);
     mesh.rotation.y += yaw;
   }
@@ -213,11 +203,10 @@ export function initMainGalleryMath({ mountEl }) {
     const dt = Math.min((now - last) / 1000, 0.033);
     last = now;
 
-    // smooth follow (no physics, just cinematic easing)
+    // smooth follow
     const t = 1 - Math.pow(1 - FOLLOW, dt * 60);
     currentIndex = lerp(currentIndex, targetIndex, t);
 
-    // layout cards
     for (const c of cards) layoutCard(c);
 
     renderer.render(scene, camera);
