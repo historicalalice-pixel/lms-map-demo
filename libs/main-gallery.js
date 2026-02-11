@@ -1,15 +1,15 @@
 // libs/main-gallery.js
-// Curved gallery engine (3 synced rows, inertia, snap).
-// Variant 1 ("як 100lostspecies"):
-//   ✅ Немає авто-дрейфу (коли юзер нічого не робить — сцена статична)
-//   ✅ Рух тільки від wheel/drag
-//   ✅ 3 ряди СИНХРОННІ (один індекс/кут для всіх рядів)
-//
-// Notes:
-// - Row sync робимо так: ОДИН shared STEP_ANGLE для всіх рядів.
-// - Раніше були різні stepAngle/швидкості по рядах => "рвані ряди".
+// 100lostspecies-inspired curved gallery engine (3 belts, inertia, parallax, snap).
+// Variant 1:
+//   ✅ NO auto drift (static when idle)
+//   ✅ move only via wheel/drag
+//   ✅ rows are SYNCED (no "ripped rows")
 
-import * as THREE from "./three.module.js";
+// IMPORTANT:
+// Your /libs/three.module.js in the zip is EMPTY (0 bytes).
+// So we MUST import Three via importmap CDN from main.html:
+import * as THREE from "three";
+
 import { GALLERY_ITEMS } from "./data.js";
 
 export function initMainGallery({ mountEl }) {
@@ -39,6 +39,8 @@ export function initMainGallery({ mountEl }) {
   const scene = new THREE.Scene();
 
   const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 5000);
+
+  // Fixed camera Z — no zoom / no fly-away
   const CAM_Z = 920;
   camera.position.set(0, 0, CAM_Z);
   camera.lookAt(0, 0, 0);
@@ -49,8 +51,6 @@ export function initMainGallery({ mountEl }) {
   const CARD_W = 340;
   const CARD_H = 220;
 
-  // Різні радіуси можна лишати — це дає depth,
-  // але STEP (кутовий крок) має бути ОДИН для всіх рядів.
   const R_MID = 980;
   const R_BOT = 1020;
   const R_TOP = 1060;
@@ -61,18 +61,20 @@ export function initMainGallery({ mountEl }) {
 
   const COUNT = 36;
 
-  // ONE shared step angle for ALL rows => synced columns
+  // ✅ ONE shared step angle => synced columns across rows
   const GAP = 190;
   const STEP_ANGLE = (CARD_W + GAP) / R_MID;
 
-  // one global phase for all rows => strict sync
+  // ✅ ONE shared phase baseline (rows can have small offsets, but NOT speed differences)
   const PHASE_ALL = 0.35;
 
   // readability window
   const READABLE_DEG = 38;
   const READABLE_RAD = (READABLE_DEG * Math.PI) / 180;
+
   const FADE_START = READABLE_RAD * 0.95;
   const FADE_END = READABLE_RAD * 1.65;
+
   const HARD_CULL = Math.PI * 0.92;
 
   // ---------------- texture factory ----------------
@@ -86,7 +88,8 @@ export function initMainGallery({ mountEl }) {
   }
 
   function makeCardTexture(title, subtitle, seed) {
-    const w = 768, h = 512;
+    const w = 768,
+      h = 512;
     const c = document.createElement("canvas");
     c.width = w;
     c.height = h;
@@ -146,14 +149,10 @@ export function initMainGallery({ mountEl }) {
   // ---------------- build rows ----------------
   const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
 
-  function createRow({ y, radius, rowKind }) {
+  function createRow({ y, radius, rowKind, phaseOffset }) {
     const group = new THREE.Group();
     group.position.y = y;
     scene.add(group);
-
-    // row base style (like your spec)
-    const baseOpacity = rowKind === "mid" ? 1.0 : rowKind === "bot" ? 0.82 : 0.65;
-    const baseScale = rowKind === "mid" ? 1.0 : rowKind === "bot" ? 0.92 : 0.88;
 
     for (let i = 0; i < COUNT; i++) {
       const item =
@@ -171,17 +170,9 @@ export function initMainGallery({ mountEl }) {
       });
 
       const mesh = new THREE.Mesh(planeGeo, mat);
-      mesh.userData = {
-        i,
-        radius,
-        rowKind,
-        baseOpacity,
-        baseScale,
-      };
-
+      mesh.userData = { i, radius, rowKind, phaseOffset };
       group.add(mesh);
 
-      // subtle border glow
       const frame = new THREE.Mesh(
         new THREE.PlaneGeometry(CARD_W + 18, CARD_H + 18),
         new THREE.MeshBasicMaterial({
@@ -199,33 +190,31 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  const rowMid = createRow({ y: Y_MID, radius: R_MID, rowKind: "mid" });
-  const rowBot = createRow({ y: Y_BOT, radius: R_BOT, rowKind: "bot" });
-  const rowTop = createRow({ y: Y_TOP, radius: R_TOP, rowKind: "top" });
+  // Small phase offsets are OK (visual variety) because step & scroll are shared.
+  const rowMid = createRow({ y: Y_MID, radius: R_MID, rowKind: "mid", phaseOffset: 0.00 });
+  const rowBot = createRow({ y: Y_BOT, radius: R_BOT, rowKind: "bot", phaseOffset: 0.20 });
+  const rowTop = createRow({ y: Y_TOP, radius: R_TOP, rowKind: "top", phaseOffset: 0.38 });
 
-  // ---------------- motion state (inertia) ----------------
-  // scrollPos is an angle offset around the cylinder
+  // ---------------- motion state ----------------
   let scrollPos = 0;
   let vel = 0;
   let impulse = 0;
 
-  // inertia / feel
   const V_MAX = 0.028;
   const IMPULSE_DECAY = 0.20;
   const DAMPING = 0.92;
-  const AUTO_DRIFT = 0; // ✅ NO drift
 
-  // drag
+  // ✅ Variant 1: no drift
+  const AUTO_DRIFT = 0;
+
   let down = false;
   let lastX = 0;
 
-  // camera parallax
   let mx = 0,
     my = 0;
   let camX = 0,
     camY = 0;
 
-  // snap
   const SNAP_THRESHOLD = 0.18 * V_MAX;
   const SNAP_STRENGTH = 0.030;
   const SNAP_DAMP = 0.90;
@@ -270,11 +259,42 @@ export function initMainGallery({ mountEl }) {
   window.addEventListener("pointerup", onPointerUp, { passive: true });
   window.addEventListener("pointercancel", onPointerUp, { passive: true });
 
-  // ---------------- snap / focus ----------------
-  // We snap so that SOME card's theta becomes 0 (center axis).
-  // theta_i = i*STEP + scrollPos + PHASE_ALL
-  // center when wrapPi(theta_i) ~ 0
+  // ---------------- style ----------------
+  function applyStyle(mesh, absAngle, rowKind, isFocused) {
+    const tFade = 1 - smoothstep(FADE_START, FADE_END, absAngle);
+
+    let baseOpacity = 1.0;
+    let baseScale = 1.0;
+
+    if (rowKind === "mid") {
+      baseOpacity = 1.0;
+      baseScale = 1.0;
+    } else if (rowKind === "bot") {
+      baseOpacity = 0.82;
+      baseScale = 0.92;
+    } else if (rowKind === "top") {
+      baseOpacity = 0.65;
+      baseScale = 0.88;
+    }
+
+    const focusBoost = isFocused ? 1.10 : 1.00;
+    const focusOpacityBoost = isFocused ? 1.00 : 0.96;
+
+    const minO = rowKind === "mid" ? 0.10 : 0.06;
+    const maxO = baseOpacity * focusOpacityBoost;
+
+    mesh.material.opacity = lerp(minO, maxO, tFade);
+
+    const minS = baseScale * 0.78;
+    const maxS = baseScale * 1.06 * focusBoost;
+    mesh.scale.setScalar(lerp(minS, maxS, tFade));
+
+    mesh.visible = absAngle < HARD_CULL;
+  }
+
+  // ---------------- snap ----------------
   function nearestSnapTarget() {
+    // theta_i = i*STEP + scrollPos + PHASE_ALL  (shared for all rows)
     let bestI = 0;
     let bestAbs = Infinity;
 
@@ -294,35 +314,19 @@ export function initMainGallery({ mountEl }) {
 
   let focusedIndex = 0;
 
-  function applyStyle(mesh, absAngle, isFocused) {
-    const { rowKind, baseOpacity, baseScale } = mesh.userData;
-
-    const tFade = 1 - smoothstep(FADE_START, FADE_END, absAngle);
-
-    const focusBoost = isFocused ? 1.10 : 1.0;
-    const focusOpacityBoost = isFocused ? 1.0 : 0.96;
-
-    const minO = rowKind === "mid" ? 0.10 : 0.06;
-    const maxO = baseOpacity * focusOpacityBoost;
-    mesh.material.opacity = lerp(minO, maxO, tFade);
-
-    const minS = baseScale * 0.78;
-    const maxS = baseScale * 1.06 * focusBoost;
-    const s = lerp(minS, maxS, tFade);
-    mesh.scale.setScalar(s);
-
-    mesh.visible = absAngle < HARD_CULL;
-  }
-
+  // ---------------- place cards ----------------
   function updateRow(group) {
-    const groupY = group.position.y;
     for (const mesh of group.children) {
       if (!mesh.isMesh) continue;
 
       const i = mesh.userData.i;
       const R = mesh.userData.radius;
+      const phaseOffset = mesh.userData.phaseOffset || 0;
+      const rowKind = mesh.userData.rowKind;
 
-      const theta = i * STEP_ANGLE + scrollPos + PHASE_ALL;
+      // ✅ synced index axis:
+      const theta = i * STEP_ANGLE + scrollPos + PHASE_ALL + phaseOffset;
+
       const a = wrapPi(theta);
       const absA = Math.abs(a);
 
@@ -330,11 +334,14 @@ export function initMainGallery({ mountEl }) {
       const z = Math.cos(theta) * R;
       mesh.position.set(x, 0, z);
 
-      mesh.lookAt(camera.position.x, camera.position.y - groupY, camera.position.z);
+      // Face camera
+      mesh.lookAt(camera.position.x, camera.position.y - group.position.y, camera.position.z);
+
+      // subtle edge rotation
       mesh.rotation.y += -a * 0.10;
 
-      const isFocused = mesh.userData.rowKind === "mid" && i === focusedIndex;
-      applyStyle(mesh, absA, isFocused);
+      const isFocused = rowKind === "mid" && i === focusedIndex;
+      applyStyle(mesh, absA, rowKind, isFocused);
     }
   }
 
@@ -355,17 +362,15 @@ export function initMainGallery({ mountEl }) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
 
-    // input -> velocity
     vel += impulse;
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
 
     vel = clamp(vel, -V_MAX, V_MAX);
     vel *= Math.pow(DAMPING, dt * 60);
 
-    // ✅ no drift (AUTO_DRIFT = 0)
+    // ✅ no drift
     vel += AUTO_DRIFT;
 
-    // snap
     const snap = nearestSnapTarget();
     focusedIndex = snap.index;
 
@@ -378,7 +383,7 @@ export function initMainGallery({ mountEl }) {
 
     scrollPos += vel;
 
-    // gentle camera parallax
+    // camera parallax
     camX = lerp(camX, mx * 26, 1 - Math.pow(0.86, dt * 60));
     camY = lerp(camY, my * 14, 1 - Math.pow(0.86, dt * 60));
 
@@ -387,12 +392,10 @@ export function initMainGallery({ mountEl }) {
     camera.position.set(camX, camY, CAM_Z);
     camera.lookAt(0, 0, 0);
 
-    // tiny row breathing (still synced by theta/index)
     rowTop.position.y = Y_TOP + -microY * 0.6;
     rowBot.position.y = Y_BOT + microY * 0.6;
     rowMid.position.y = Y_MID;
 
-    // update ALL rows with the same scrollPos & same STEP_ANGLE
     updateRow(rowMid);
     updateRow(rowBot);
     updateRow(rowTop);
@@ -417,4 +420,3 @@ export function initMainGallery({ mountEl }) {
     },
   };
 }
- 
