@@ -6,7 +6,7 @@
   <title>LMS | Main</title>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&display=swap');
 
     :root{
       --bg0:#05070d;
@@ -27,12 +27,14 @@
       overflow:hidden;
     }
 
+    /* 3D canvas holder */
     #gallery3d{
       position: fixed;
       inset: 0;
       z-index: 1;
     }
 
+    /* subtle vignette */
     .vignette{
       position: fixed; inset: 0;
       pointer-events:none;
@@ -70,7 +72,7 @@
     }
   </style>
 
-  <!-- Three.js via importmap -->
+  <!-- ✅ Three.js безкоштовно з CDN -->
   <script type="importmap">
     {
       "imports": {
@@ -85,13 +87,12 @@
   <div class="vignette" aria-hidden="true"></div>
 
   <div class="badge">WebGL • Three.js</div>
-  <div class="hint">Wheel — плавний рух • Drag — керування</div>
+  <div class="hint">Wheel — плавний рух • Drag — керування • Drag up — 3-тя стрічка</div>
 
   <script type="module">
-    import { initMainGalleryMath } from "./libs/main-gallery.js";
-
+    import { initMainGallery } from "./libs/main-gallery.js";
     const mountEl = document.getElementById("gallery3d");
-    initMainGalleryMath({ mountEl });
+    initMainGallery({ mountEl });
   </script>
 </body>
 </html>
