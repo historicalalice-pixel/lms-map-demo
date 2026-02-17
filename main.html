@@ -1,127 +1,443 @@
-<!doctype html>
-<html lang="uk">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LMS | Main</title>
+// libs/main-gallery.js
+import * as THREE from "three";
+import { GALLERY_ITEMS } from "./data.js";
 
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&display=swap');
+export function initMainGallery({ mountEl }) {
+  if (!mountEl) throw new Error("initMainGallery: mountEl is required");
 
-    :root{
-      --bg0:#05070d;
-      --bg1:#070a14;
-      --text:#e8eefc;
-      --muted: rgba(232,238,252,.70);
+  // -----------------------------
+  // Utils
+  // -----------------------------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  const smooth01 = (t) => t * t * (3 - 2 * t);
+  const smoothstep = (a, b, x) => smooth01(clamp((x - a) / (b - a), 0, 1));
+
+  const wrapPi = (a) => {
+    a = (a + Math.PI) % (2 * Math.PI);
+    if (a < 0) a += 2 * Math.PI;
+    return a - Math.PI;
+  };
+
+  // -----------------------------
+  // Renderer
+  // -----------------------------
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.setClearColor(0x000000, 0);
+  renderer.sortObjects = true;
+
+  mountEl.innerHTML = "";
+  mountEl.appendChild(renderer.domElement);
+  renderer.domElement.style.touchAction = "none";
+
+  // -----------------------------
+  // Scene / Camera (orbit Y)
+  // -----------------------------
+  const scene = new THREE.Scene();
+  scene.fog = null;
+
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 9000);
+
+  const CAM_R = 2100;
+  const CAM_PHI_BASE = 1.30;
+  const AUTO_CAM_ROT = 0.045;
+
+  const MOUSE_THETA = 0.18;
+  const MOUSE_PHI = 0.10;
+
+  let camTheta = 0;
+  let camPhi = CAM_PHI_BASE;
+
+  // -----------------------------
+  // Layout (3 rows)
+  // -----------------------------
+  const CARD_W = 360;
+  const CARD_H = 240;
+
+  const R_MID = 1020;
+  const R_TOP = 1080;
+  const R_BOT = 960;
+
+  const ROW_GAP = CARD_H * 1.05;
+  const Y_MID = 0;
+  const Y_TOP = +ROW_GAP;
+  const Y_BOT = -ROW_GAP;
+
+  const COUNT = 36;
+
+  const GAP = 140;
+  const STEP_ANGLE = (CARD_W + GAP) / R_MID;
+
+  // -----------------------------
+  // Textures (opaque)
+  // -----------------------------
+  function mulberry32(a) {
+    return function () {
+      let t = (a += 0x6d2b79f5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function roundedRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function makeCardTexture(title, subtitle, seed) {
+    const w = 768, h = 512;
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d");
+
+    const rng = mulberry32(seed);
+
+    g.fillStyle = "rgb(10,12,22)";
+    g.fillRect(0, 0, w, h);
+
+    const grd = g.createLinearGradient(0, 0, w, h);
+    grd.addColorStop(0, "rgba(90,160,255,0.20)");
+    grd.addColorStop(1, "rgba(70,240,190,0.10)");
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
+
+    g.save();
+    roundedRect(g, 22, 22, w - 44, h - 44, 26);
+    g.clip();
+
+    const glass = g.createRadialGradient(w * 0.55, h * 0.45, 80, w * 0.55, h * 0.45, 520);
+    glass.addColorStop(0, "rgba(255,255,255,0.10)");
+    glass.addColorStop(1, "rgba(255,255,255,0.02)");
+    g.fillStyle = glass;
+    g.fillRect(0, 0, w, h);
+
+    g.globalAlpha = 0.9;
+    g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(140 + rng() * 80)},${Math.floor(
+      170 + rng() * 70
+    )},0.30)`;
+    g.beginPath();
+    g.ellipse(
+      w * 0.66,
+      h * 0.62,
+      w * (0.18 + rng() * 0.06),
+      h * (0.16 + rng() * 0.06),
+      rng() * 0.9,
+      0,
+      Math.PI * 2
+    );
+    g.fill();
+    g.globalAlpha = 1;
+
+    const vg = g.createRadialGradient(w * 0.55, h * 0.55, 120, w * 0.55, h * 0.55, 620);
+    vg.addColorStop(0, "rgba(0,0,0,0.00)");
+    vg.addColorStop(1, "rgba(0,0,0,0.55)");
+    g.fillStyle = vg;
+    g.fillRect(0, 0, w, h);
+
+    g.restore();
+
+    g.strokeStyle = "rgba(232,238,252,0.28)";
+    g.lineWidth = 4;
+    roundedRect(g, 18, 18, w - 36, h - 36, 26);
+    g.stroke();
+
+    g.strokeStyle = "rgba(232,238,252,0.10)";
+    g.lineWidth = 2;
+    roundedRect(g, 40, 40, w - 80, h - 80, 20);
+    g.stroke();
+
+    g.fillStyle = "rgba(245,245,255,0.96)";
+    g.font = "700 38px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    g.fillText(title || "Картка", 56, 104);
+
+    g.fillStyle = "rgba(232,238,252,0.72)";
+    g.font = "600 22px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    g.fillText(subtitle || "Модуль / Епізод", 56, 142);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 8;
+    if ("SRGBColorSpace" in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  // -----------------------------
+  // Build rows
+  // -----------------------------
+  const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
+
+  function createRow({ y, radius, phase, rowKind }) {
+    const group = new THREE.Group();
+    group.position.y = y;
+    group.userData = { radius, phase, rowKind };
+    scene.add(group);
+
+    for (let i = 0; i < COUNT; i++) {
+      const item =
+        GALLERY_ITEMS && GALLERY_ITEMS.length
+          ? GALLERY_ITEMS[i % GALLERY_ITEMS.length]
+          : { title: `Картка ${i + 1}`, subtitle: "Модуль / Епізод" };
+
+      const tex = makeCardTexture(item.title, item.subtitle, i * 991 + Math.floor((y + 1000) * 7));
+
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: false,
+        side: THREE.DoubleSide,
+        depthWrite: true,
+        depthTest: true,
+      });
+
+      const mesh = new THREE.Mesh(planeGeo, mat);
+      mesh.userData = { i };
+      group.add(mesh);
     }
 
-    * { box-sizing: border-box; }
+    return group;
+  }
 
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
+  const rowMid = createRow({ y: Y_MID, radius: R_MID, phase: 0.35, rowKind: "mid" });
+  const rowTop = createRow({ y: Y_TOP, radius: R_TOP, phase: 0.55, rowKind: "top" });
+  const rowBot = createRow({ y: Y_BOT, radius: R_BOT, phase: 0.15, rowKind: "bot" });
+
+  // -----------------------------
+  // Motion
+  // -----------------------------
+  let scrollAngle = 0;
+  let vel = 0;
+  let impulse = 0;
+
+  const V_MAX = 0.028;
+  const DAMPING = 0.90;
+  const IMPULSE_DECAY = 0.18;
+
+  // IMPORTANT: для “дорогого” вигляду — мінімальний паралакс
+  const SPEED_MID = 1.0;
+  const SPEED_TOP = 1.03;
+  const SPEED_BOT = 0.97;
+
+  const SNAP_ENABLE = true;
+  const SNAP_WHEN_VEL_LT = 0.0035;
+  const SNAP_LERP = 0.14;
+  const SNAP_KILL_VEL = 0.84;
+
+  let down = false;
+  let lastX = 0;
+
+  let mx = 0, my = 0;
+  let mxT = 0, myT = 0;
+
+  function onMouseMove(e) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / r.width;
+    const ny = (e.clientY - r.top) / r.height;
+    mxT = (nx - 0.5) * 2;
+    myT = (0.5 - ny) * 2;
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    const d = clamp(e.deltaY, -120, 120);
+    impulse += d * 0.00022;
+  }
+
+  function onPointerDown(e) {
+    down = true;
+    lastX = e.clientX;
+  }
+
+  function onPointerMove(e) {
+    if (!down) return;
+    const dx = e.clientX - lastX;
+    lastX = e.clientX;
+    impulse += -dx * 0.00006;
+  }
+
+  function onPointerUp() {
+    down = false;
+  }
+
+  window.addEventListener("mousemove", onMouseMove, { passive: true });
+  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+  window.addEventListener("pointerdown", onPointerDown, { passive: true });
+  window.addEventListener("pointermove", onPointerMove, { passive: true });
+  window.addEventListener("pointerup", onPointerUp, { passive: true });
+  window.addEventListener("pointercancel", onPointerUp, { passive: true });
+
+  // -----------------------------
+  // Resize
+  // -----------------------------
+  function onResize() {
+    const w = mountEl.clientWidth || window.innerWidth;
+    const h = mountEl.clientHeight || window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", onResize);
+  onResize();
+
+  // -----------------------------
+  // Snap helpers
+  // -----------------------------
+  function focusedIndexFromAngle(phase) {
+    const raw = -(scrollAngle + phase) / STEP_ANGLE;
+    const idx = ((Math.round(raw) % COUNT) + COUNT) % COUNT;
+    return idx;
+  }
+
+  function snapAngleToIndex(idx, phase) {
+    return -(idx * STEP_ANGLE + phase);
+  }
+
+  // ✅ Старт без “стрибка”: одразу центримо 0-ву картку
+  scrollAngle = snapAngleToIndex(0, rowMid.userData.phase);
+
+  let focusedMid = 0;
+
+  // -----------------------------
+  // Styling
+  // -----------------------------
+  function styleByRank(mesh, rank, rowKind) {
+    // rank 0 = nearest to front (hero)
+    if (rowKind === "mid") {
+      const s = rank === 0 ? 1.14 : rank === 1 ? 1.06 : 0.98;
+      mesh.scale.setScalar(s);
+      const c = rank === 0 ? 1.0 : rank === 1 ? 0.85 : 0.72;
+      mesh.material.color.setScalar(c);
+    } else {
+      const s = rank === 0 ? 0.92 : 0.86;
+      mesh.scale.setScalar(s);
+      const c = rank === 0 ? 0.60 : 0.52;
+      mesh.material.color.setScalar(c);
+    }
+  }
+
+  // -----------------------------
+  // Update row: choose nearest-by-angle, not by index
+  // -----------------------------
+  function updateRow(group, speedMul) {
+    const { radius, phase, rowKind } = group.userData;
+
+    // 4 on mid, 2 on top/bot
+    const want = rowKind === "mid" ? 4 : 2;
+
+    // collect angles
+    const arr = [];
+    for (const mesh of group.children) {
+      const i = mesh.userData.i;
+      const theta = i * STEP_ANGLE + scrollAngle * speedMul + phase;
+      const a = wrapPi(theta);
+      arr.push({ mesh, i, theta, a, absA: Math.abs(a) });
     }
 
-    body{
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(1100px 700px at 65% 20%, rgba(30,90,200,.22), transparent 60%),
-        radial-gradient(900px 600px at 25% 70%, rgba(80,200,160,.10), transparent 55%),
-        linear-gradient(180deg, var(--bg1), var(--bg0));
+    // choose closest to front (a≈0)
+    arr.sort((p, q) => p.absA - q.absA);
+    const chosen = arr.slice(0, want);
+
+    // hide all first
+    for (const p of arr) p.mesh.visible = false;
+
+    // place + style chosen
+    for (let rank = 0; rank < chosen.length; rank++) {
+      const p = chosen[rank];
+      const mesh = p.mesh;
+      mesh.visible = true;
+
+      const x = Math.sin(p.theta) * radius;
+      const z = Math.cos(p.theta) * radius;
+
+      // mid row always slightly in front (product hierarchy)
+      const zBias = rowKind === "mid" ? 26 : rowKind === "top" ? -8 : -10;
+
+      mesh.position.set(x, 0, z + zBias);
+
+      // face camera
+      mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
+
+      // very subtle twist
+      mesh.rotation.y = -Math.sin(p.theta) * 0.06;
+
+      styleByRank(mesh, rank, rowKind);
+
+      // stable draw order
+      mesh.renderOrder = 1000 + (rowKind === "mid" ? 50 : 0) + (10 - rank);
+    }
+  }
+
+  // -----------------------------
+  // Loop
+  // -----------------------------
+  let lastT = performance.now();
+
+  function tick(now) {
+    const dt = Math.min((now - lastT) / 1000, 0.033);
+    lastT = now;
+
+    vel += impulse;
+    impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
+    vel = clamp(vel, -V_MAX, V_MAX);
+    vel *= Math.pow(DAMPING, dt * 60);
+    scrollAngle += vel;
+
+    mx = lerp(mx, mxT, 1 - Math.pow(0.965, dt * 60));
+    my = lerp(my, myT, 1 - Math.pow(0.965, dt * 60));
+
+    const thetaBase = now * 0.001 * AUTO_CAM_ROT;
+    const thetaGoal = thetaBase + mx * MOUSE_THETA;
+    const phiGoal = clamp(CAM_PHI_BASE + -my * MOUSE_PHI, 1.18, 1.42);
+
+    camTheta = lerp(camTheta, thetaGoal, 1 - Math.pow(0.92, dt * 60));
+    camPhi = lerp(camPhi, phiGoal, 1 - Math.pow(0.92, dt * 60));
+
+    const sx = Math.sin(camPhi) * Math.sin(camTheta);
+    const sy = Math.cos(camPhi);
+    const sz = Math.sin(camPhi) * Math.cos(camTheta);
+
+    camera.position.set(sx * CAM_R, sy * CAM_R, sz * CAM_R);
+    camera.lookAt(0, 0, 0);
+
+    // focus + snap (mid master)
+    focusedMid = focusedIndexFromAngle(rowMid.userData.phase);
+
+    if (SNAP_ENABLE && !down && Math.abs(vel) < SNAP_WHEN_VEL_LT) {
+      const targetAngle = snapAngleToIndex(focusedMid, rowMid.userData.phase);
+      scrollAngle = lerp(scrollAngle, targetAngle, SNAP_LERP);
+      vel *= SNAP_KILL_VEL;
     }
 
-    /* ✅ 3D canvas holder — FULLSCREEN FORCE */
-    #gallery3d{
-      position: fixed;
-      left: 0; top: 0; right: 0; bottom: 0;
-      width: 100vw;
-      height: 100vh;
-      display: block;
-      overflow: hidden;
-      z-index: 1;
-    }
+    updateRow(rowMid, SPEED_MID);
+    updateRow(rowTop, SPEED_TOP);
+    updateRow(rowBot, SPEED_BOT);
 
-    /* ✅ Супер-страховка: якщо десь inline-стилі зроблять canvas 150px */
-    #gallery3d canvas{
-      width: 100% !important;
-      height: 100% !important;
-      display: block;
-      touch-action: none;
-    }
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
 
-    /* subtle vignette */
-    .vignette{
-      position: fixed; inset: 0;
-      pointer-events: none;
-      z-index: 2;
-      background:
-        radial-gradient(1200px 700px at 50% 45%, rgba(0,0,0,.0), rgba(0,0,0,.55) 70%, rgba(0,0,0,.78) 100%);
-      mix-blend-mode: multiply;
-    }
+  requestAnimationFrame(tick);
 
-    .badge{
-      position: fixed;
-      right: 18px;
-      top: 14px;
-      z-index: 3;
-      font-size: 12px;
-      padding: 8px 10px;
-      border-radius: 999px;
-      background: rgba(232,238,252,.06);
-      border: 1px solid rgba(232,238,252,.10);
-      color: rgba(232,238,252,.70);
-      pointer-events: none;
-      user-select: none;
-      backdrop-filter: blur(10px);
-    }
-
-    .hint{
-      position: fixed;
-      left: 18px;
-      bottom: 14px;
-      z-index: 3;
-      font-size: 12px;
-      color: rgba(232,238,252,.55);
-      pointer-events: none;
-      user-select: none;
-    }
-  </style>
-
-  <!-- Three.js з CDN через importmap -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-      }
-    }
-  </script>
-</head>
-
-<body>
-  <div id="gallery3d" aria-hidden="true"></div>
-  <div class="vignette" aria-hidden="true"></div>
-
-  <div class="badge">WebGL • Three.js</div>
-  <div class="hint">Wheel — плавний рух • Drag — керування • Drag up — 3-тя стрічка</div>
-
-  <script type="module">
-    import { initMainGallery } from "./libs/main-gallery.js";
-
-    const mountEl = document.getElementById("gallery3d");
-    initMainGallery({ mountEl });
-
-    // ✅ Діагностика (можеш видалити потім):
-    // В консолі буде видно реальний розмір контейнера і canvas.
-    requestAnimationFrame(() => {
-      const c = mountEl.querySelector("canvas");
-      const r = mountEl.getBoundingClientRect();
-      console.log("[gallery3d]", Math.round(r.width), Math.round(r.height));
-      if (c) console.log("[canvas style]", c.style.width, c.style.height, "| attr", c.width, c.height);
-    });
-  </script>
-</body>
-</html>
+  // -----------------------------
+  // Cleanup
+  // -----------------------------
+  return {
+    destroy() {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("mousemove", onMouseMove);
+      renderer.domElement.removeEventListener("wheel", onWheel);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      renderer.dispose();
+      mountEl.innerHTML = "";
+    },
+  };
+}
