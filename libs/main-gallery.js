@@ -10,8 +10,7 @@ export function initMainGallery({ mountEl }) {
   // -----------------------------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
-
-  const smooth01 = (t) => t * t * (3 - 2 * t); // smoothstep 0..1
+  const smooth01 = (t) => t * t * (3 - 2 * t);
   const smoothstep = (a, b, x) => smooth01(clamp((x - a) / (b - a), 0, 1));
 
   const wrapPi = (a) => {
@@ -20,76 +19,82 @@ export function initMainGallery({ mountEl }) {
     return a - Math.PI;
   };
 
+  // signed shortest delta between indices on ring
+  const ringDelta = (i, focus, count) => {
+    let d = i - focus;
+    d = ((d % count) + count) % count; // 0..count-1
+    if (d > count / 2) d -= count; // -count/2..count/2
+    return d;
+  };
+
   // -----------------------------
   // Renderer
   // -----------------------------
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.setClearColor(0x000000, 0);
+  // трохи допомагає з прозорістю
+  renderer.sortObjects = true;
 
   mountEl.innerHTML = "";
   mountEl.appendChild(renderer.domElement);
   renderer.domElement.style.touchAction = "none";
 
   // -----------------------------
-  // Scene / Camera (Orbit around Y)
+  // Scene / Camera
   // -----------------------------
   const scene = new THREE.Scene();
   scene.fog = null;
 
-  // ФОВ трохи вужчий => “менше пласкості”
+  // Тримаємо “кінематографічний” фокус, не супер-широкий
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 8000);
 
-  // ✅ КАМЕРА ЗОВНІ КІЛЬЦЯ (щоб не було виду “з краю картки”)
-  const CAM_R = 2000;
-  const CAM_PHI_BASE = 1.35; // більш "по горизонту", не зверху
-  const AUTO_CAM_ROT = 0.055; // дуже повільний автоповорот
+  // Orbit навколо Y
+  const CAM_R = 2050;        // камера ДАЛЕКО від кільця => не “в площині карток”
+  const CAM_PHI_BASE = 1.33; // майже по горизонту
+  const AUTO_CAM_ROT = 0.055;
 
-  // mouse influence (кінематографічно м’яко)
-  const MOUSE_THETA = 0.32;
-  const MOUSE_PHI = 0.16;
+  const MOUSE_THETA = 0.30;
+  const MOUSE_PHI = 0.14;
 
   let camTheta = 0;
   let camPhi = CAM_PHI_BASE;
 
-  // target (центр сцени)
-  const target = new THREE.Vector3(0, 0, 0);
-
   // -----------------------------
-  // Layout: 3 Rows, symmetric, mid is main
+  // Layout (3 rows) — згідно ТЗ
   // -----------------------------
   const CARD_W = 360;
   const CARD_H = 240;
 
-  // ✅ Кільця компактніші, щоб центр був у кадрі і не “по краях”
-  const R_MID = 900;
-  const R_BOT = 980;
-  const R_TOP = 1050;
+  // ✅ компактніше кільце, щоб центр був у кадрі
+  const R_MID = 980;
+  const R_TOP = 1080;
+  const R_BOT = 1040;
 
-  // ✅ 3 ряди симетрично
-  const ROW_GAP = CARD_H * 0.78;
+  // ✅ 3 ряди, симетрично
+  const ROW_GAP = CARD_H * 0.80;
   const Y_MID = 0;
   const Y_TOP = +ROW_GAP;
   const Y_BOT = -ROW_GAP;
 
   const COUNT = 36;
 
-  // Крок по колу: контроль щільності
-  // Важливо: не роби великий GAP, інакше "в кадрі 1-2 картки"
-  const GAP = 60;
+  // Крок між картками по колу.
+  // Важливо: ми НЕ намагаємось “показати всі”, ми показуємо 4.
+  const GAP = 110;
   const STEP_ANGLE = (CARD_W + GAP) / R_MID;
 
-  // ✅ “Видимий сектор” — гарантує ~до 4 карток у рядку
-  // Реально контроль йде через FADE_END + visible=false
-  const READABLE_DEG = 40; // вузько, але достатньо для ~4
-  const READABLE_RAD = (READABLE_DEG * Math.PI) / 180;
+  // ✅ В рядку максимум 4 картки (жорстко)
+  // Беремо 4 індекси навколо фокуса:
+  // [-2, -1, 0, +1] (симетрично відносно центру)
+  const VISIBLE_DELTAS = new Set([-2, -1, 0, 1]);
 
-  // коли починаємо гасити і коли вимикаємо
-  const FADE_START = READABLE_RAD * 0.55;
-  const FADE_END = READABLE_RAD * 1.05;
+  // Де починаємо “гасити” на краю сектора (для м’якості)
+  const EDGE_START = STEP_ANGLE * 1.25; // приблизно після 2-ї картки від центру
+  const EDGE_END = STEP_ANGLE * 2.2;
 
   // -----------------------------
-  // Card Texture (simple canvas)
+  // Card texture
   // -----------------------------
   function mulberry32(a) {
     return function () {
@@ -101,42 +106,33 @@ export function initMainGallery({ mountEl }) {
   }
 
   function makeCardTexture(title, subtitle, seed) {
-    const w = 768,
-      h = 512;
+    const w = 768, h = 512;
     const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
+    c.width = w; c.height = h;
     const g = c.getContext("2d");
 
-    // base
     g.fillStyle = "rgba(10,12,22,1)";
     g.fillRect(0, 0, w, h);
 
-    // gradient
     const grd = g.createLinearGradient(0, 0, w, h);
     grd.addColorStop(0, "rgba(90,160,255,0.20)");
     grd.addColorStop(1, "rgba(70,240,190,0.12)");
     g.fillStyle = grd;
     g.fillRect(0, 0, w, h);
 
-    // vignette
-    const vg = g.createRadialGradient(w * 0.55, h * 0.55, 60, w * 0.55, h * 0.55, 520);
+    const vg = g.createRadialGradient(w * 0.55, h * 0.55, 70, w * 0.55, h * 0.55, 520);
     vg.addColorStop(0, "rgba(0,0,0,0)");
-    vg.addColorStop(1, "rgba(0,0,0,0.65)");
+    vg.addColorStop(1, "rgba(0,0,0,0.66)");
     g.fillStyle = vg;
     g.fillRect(0, 0, w, h);
 
-    // frame
     g.strokeStyle = "rgba(232,238,252,0.28)";
     g.lineWidth = 4;
     g.strokeRect(18, 18, w - 36, h - 36);
 
-    // blob
     const rng = mulberry32(seed);
     g.globalAlpha = 0.95;
-    g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(
-      140 + rng() * 80
-    )},${Math.floor(170 + rng() * 70)},0.34)`;
+    g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(140 + rng() * 80)},${Math.floor(170 + rng() * 70)},0.34)`;
     g.beginPath();
     g.ellipse(
       w * 0.62,
@@ -144,13 +140,11 @@ export function initMainGallery({ mountEl }) {
       w * (0.18 + rng() * 0.07),
       h * (0.16 + rng() * 0.07),
       rng() * 0.9,
-      0,
-      Math.PI * 2
+      0, Math.PI * 2
     );
     g.fill();
     g.globalAlpha = 1;
 
-    // text
     g.fillStyle = "rgba(245,245,255,0.96)";
     g.font = "700 38px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
     g.fillText(title || "Картка", 44, 92);
@@ -168,7 +162,7 @@ export function initMainGallery({ mountEl }) {
   // -----------------------------
   // Build rows
   // -----------------------------
-  const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H, 1, 1);
+  const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
 
   function createRow({ y, radius, phase, rowKind }) {
     const group = new THREE.Group();
@@ -189,15 +183,15 @@ export function initMainGallery({ mountEl }) {
         transparent: true,
         opacity: 1,
         side: THREE.DoubleSide,
-        // ✅ критично: не пишемо в depth, інакше прозорість дає “кашу”
-        depthWrite: false,
+        depthWrite: false, // ✅ критично для прозорості
+        depthTest: true,
       });
 
       const mesh = new THREE.Mesh(planeGeo, mat);
       mesh.userData = { i };
       group.add(mesh);
 
-      // subtle frame overlay
+      // легкий frame як окремий mesh
       const frame = new THREE.Mesh(
         new THREE.PlaneGeometry(CARD_W + 18, CARD_H + 18),
         new THREE.MeshBasicMaterial({
@@ -206,24 +200,24 @@ export function initMainGallery({ mountEl }) {
           opacity: 0.10,
           side: THREE.DoubleSide,
           depthWrite: false,
+          depthTest: true,
         })
       );
-      frame.position.z = 0.2;
+      frame.position.z = 0.25;
       mesh.add(frame);
     }
 
     return group;
   }
 
-  // ✅ 3 ряди (симетрія)
   const rowMid = createRow({ y: Y_MID, radius: R_MID, phase: 0.35, rowKind: "mid" });
   const rowTop = createRow({ y: Y_TOP, radius: R_TOP, phase: 0.55, rowKind: "top" });
   const rowBot = createRow({ y: Y_BOT, radius: R_BOT, phase: 0.15, rowKind: "bot" });
 
   // -----------------------------
-  // Motion (scroll + snap)
+  // Motion: scroll + snap
   // -----------------------------
-  let scrollPos = 0;
+  let scrollAngle = 0; // ми крутимо кільце кутом
   let vel = 0;
   let impulse = 0;
 
@@ -231,25 +225,24 @@ export function initMainGallery({ mountEl }) {
   const DAMPING = 0.90;
   const IMPULSE_DECAY = 0.18;
 
+  // snap: “спокійний” рух
+  const SNAP_ENABLE = true;
+  const SNAP_WHEN_VEL_LT = 0.0038;
+  const SNAP_LERP = 0.14;
+  const SNAP_KILL_VEL = 0.84;
+
+  // parallax speeds per row
   const SPEED_MID = 1.00;
   const SPEED_TOP = 1.12;
   const SPEED_BOT = 0.86;
-
-  // ✅ snap to nearest card (for “calm” feel)
-  const SNAP_ENABLE = true;
-  const SNAP_WHEN_VEL_LT = 0.0038;
-  const SNAP_LERP = 0.12;
-  const SNAP_KILL_VEL = 0.86;
 
   // input
   let down = false;
   let lastX = 0;
 
   // mouse target
-  let mx = 0,
-    my = 0;
-  let mxT = 0,
-    myT = 0;
+  let mx = 0, my = 0;
+  let mxT = 0, myT = 0;
 
   function onMouseMove(e) {
     const r = renderer.domElement.getBoundingClientRect();
@@ -302,59 +295,74 @@ export function initMainGallery({ mountEl }) {
   onResize();
 
   // -----------------------------
-  // Visual style logic
+  // Focus + snap target
   // -----------------------------
-  let focusedIndex = 0;
-
-  function nearestIndexAndTarget(phase) {
-    // theta = i*STEP + scrollPos*SPEED + phase ; target theta ~ 0
-    const raw = -(scrollPos * SPEED_MID + phase) / STEP_ANGLE;
+  function focusedIndexFromAngle(phase) {
+    // theta = i*STEP + scrollAngle + phase  => theta≈0 => i≈-(scroll+phase)/STEP
+    const raw = -(scrollAngle + phase) / STEP_ANGLE;
     const idx = ((Math.round(raw) % COUNT) + COUNT) % COUNT;
-    const targetScroll = -((idx * STEP_ANGLE + phase) / SPEED_MID);
-    return { idx, targetScroll };
+    return idx;
   }
 
-  function applyStyle(mesh, absAngle, rowKind, isFocused) {
-    // tFade = 1 near center, 0 outside sector
-    const tFade = 1 - smoothstep(FADE_START, FADE_END, absAngle);
+  function snapAngleToIndex(idx, phase) {
+    // want: idx*STEP + scroll + phase = 0 => scroll = -(idx*STEP + phase)
+    return -(idx * STEP_ANGLE + phase);
+  }
 
-    // ✅ base row weights (mid is main)
-    let baseOpacity = 1.0;
-    let baseScale = 1.0;
+  // -----------------------------
+  // Styling (mid row main)
+  // -----------------------------
+  function rowWeights(rowKind) {
+    if (rowKind === "mid") return { baseOpacity: 1.0, baseScale: 1.10 };
+    if (rowKind === "top") return { baseOpacity: 0.68, baseScale: 0.92 };
+    return { baseOpacity: 0.76, baseScale: 0.96 };
+  }
 
-    if (rowKind === "mid") {
-      baseOpacity = 1.0;
-      baseScale = 1.08;
-    } else if (rowKind === "top") {
-      baseOpacity = 0.70;
-      baseScale = 0.92;
-    } else {
-      baseOpacity = 0.78;
-      baseScale = 0.96;
-    }
+  function applyStyle(mesh, absTheta, rowKind, isFocused) {
+    const { baseOpacity, baseScale } = rowWeights(rowKind);
 
+    // edge fade (мʼякий край для 4-х карток, але без “примар”)
+    const tEdge = 1 - smoothstep(EDGE_START, EDGE_END, absTheta);
+
+    // focus boost (центр головний)
     const focusBoost = isFocused ? 1.10 : 1.0;
 
-    // ✅ NO "ghosts"
-    mesh.material.opacity = lerp(0.0, baseOpacity, tFade);
+    mesh.material.opacity = lerp(0.0, baseOpacity, tEdge);
 
-    // scale in/out
-    const s = lerp(baseScale * 0.88, baseScale * 1.06 * focusBoost, tFade);
+    const s = lerp(baseScale * 0.92, baseScale * 1.06 * focusBoost, tEdge);
     mesh.scale.setScalar(s);
-
-    // ✅ hard cutoff: outside -> invisible
-    mesh.visible = absAngle <= FADE_END * 1.03;
   }
+
+  // -----------------------------
+  // Update row: show ONLY 4 cards
+  // -----------------------------
+  let focusedMid = 0;
 
   function updateRow(group, speedMul) {
     const { radius, phase, rowKind } = group.userData;
+
+    // focal index for THIS row depends on its speed (parallax)
+    // to keep alignment across rows we still anchor focus by mid
+    const focus = focusedMid;
 
     for (const mesh of group.children) {
       if (!mesh.isMesh) continue;
 
       const i = mesh.userData.i;
 
-      const theta = i * STEP_ANGLE + scrollPos * speedMul + phase;
+      // delta around the ring relative to focus
+      const d = ringDelta(i, focus, COUNT);
+
+      // ✅ HARD rule: max 4 cards
+      if (!VISIBLE_DELTAS.has(d)) {
+        mesh.visible = false;
+        continue;
+      }
+      mesh.visible = true;
+
+      // normal carousel angle:
+      // theta = i*STEP + scrollAngle*speed + phase
+      const theta = i * STEP_ANGLE + scrollAngle * speedMul + phase;
       const a = wrapPi(theta);
       const absA = Math.abs(a);
 
@@ -366,11 +374,23 @@ export function initMainGallery({ mountEl }) {
       // face camera
       mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
 
-      // ✅ no accumulation: stable twist
+      // subtle twist (NO accumulation)
       mesh.rotation.y = -a * 0.08;
 
-      const isFocused = rowKind === "mid" && i === focusedIndex;
+      // style
+      const isFocused = rowKind === "mid" && d === 0;
       applyStyle(mesh, absA, rowKind, isFocused);
+
+      // ✅ Transparent sorting control:
+      // render far first, near last (to avoid “каша”)
+      // bigger absA => farther from center => should render earlier
+      // So renderOrder smaller for bigger absA
+      mesh.renderOrder = 10000 - Math.round(absA * 1000);
+
+      // also push children (frame) after parent a bit
+      if (mesh.children && mesh.children.length) {
+        for (const ch of mesh.children) ch.renderOrder = mesh.renderOrder + 1;
+      }
     }
   }
 
@@ -388,7 +408,8 @@ export function initMainGallery({ mountEl }) {
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
     vel = clamp(vel, -V_MAX, V_MAX);
     vel *= Math.pow(DAMPING, dt * 60);
-    scrollPos += vel;
+
+    scrollAngle += vel;
 
     // mouse smoothing
     mx = lerp(mx, mxT, 1 - Math.pow(0.965, dt * 60));
@@ -397,30 +418,24 @@ export function initMainGallery({ mountEl }) {
     // camera orbit
     const thetaBase = now * 0.001 * AUTO_CAM_ROT;
     const thetaGoal = thetaBase + mx * MOUSE_THETA;
-
-    const phiGoal = clamp(
-      CAM_PHI_BASE + -my * MOUSE_PHI,
-      1.18, // min
-      1.50  // max
-    );
+    const phiGoal = clamp(CAM_PHI_BASE + -my * MOUSE_PHI, 1.18, 1.48);
 
     camTheta = lerp(camTheta, thetaGoal, 1 - Math.pow(0.92, dt * 60));
     camPhi = lerp(camPhi, phiGoal, 1 - Math.pow(0.92, dt * 60));
 
-    // spherical -> cartesian
     const sx = Math.sin(camPhi) * Math.sin(camTheta);
     const sy = Math.cos(camPhi);
     const sz = Math.sin(camPhi) * Math.cos(camTheta);
 
     camera.position.set(sx * CAM_R, sy * CAM_R, sz * CAM_R);
-    camera.lookAt(target);
+    camera.lookAt(0, 0, 0);
 
-    // snap focus
-    const snap = nearestIndexAndTarget(rowMid.userData.phase);
-    focusedIndex = snap.idx;
+    // focus + snap (по центральному ряду)
+    focusedMid = focusedIndexFromAngle(rowMid.userData.phase);
 
     if (SNAP_ENABLE && !down && Math.abs(vel) < SNAP_WHEN_VEL_LT) {
-      scrollPos = lerp(scrollPos, snap.targetScroll, SNAP_LERP);
+      const targetAngle = snapAngleToIndex(focusedMid, rowMid.userData.phase);
+      scrollAngle = lerp(scrollAngle, targetAngle, SNAP_LERP);
       vel *= SNAP_KILL_VEL;
     }
 
