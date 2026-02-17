@@ -2,6 +2,15 @@
 import * as THREE from "three";
 import { GALLERY_ITEMS } from "./data.js";
 
+/**
+ * KAYA Main Gallery (product-grade carousel)
+ * - 3 rows (top/mid/bot)
+ * - Mid row is master
+ * - Visible: mid=4, top=2, bot=2 (always front-facing, center never empty)
+ * - Opaque materials (no transparency sorting artifacts)
+ * - Soft orbit camera + subtle parallax
+ * - Smooth wheel/drag, snap-to-mid
+ */
 export function initMainGallery({ mountEl }) {
   if (!mountEl) throw new Error("initMainGallery: mountEl is required");
 
@@ -11,11 +20,11 @@ export function initMainGallery({ mountEl }) {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
 
-  const ringDelta = (i, focus, count) => {
-    let d = i - focus;
-    d = ((d % count) + count) % count; // 0..count-1
-    if (d > count / 2) d -= count; // -count/2..count/2
-    return d;
+  const wrapPi = (a) => {
+    // normalize to [-PI, +PI]
+    a = (a + Math.PI) % (2 * Math.PI);
+    if (a < 0) a += 2 * Math.PI;
+    return a - Math.PI;
   };
 
   // -----------------------------
@@ -31,20 +40,18 @@ export function initMainGallery({ mountEl }) {
   renderer.domElement.style.touchAction = "none";
 
   // -----------------------------
-  // Scene / Camera (orbit Y, cinematic)
+  // Scene / Camera
   // -----------------------------
   const scene = new THREE.Scene();
-  scene.fog = null;
 
-  // “дорожчий” вигляд — вужчий FOV
+  // A bit narrower FOV = “product” feel
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 9000);
 
-  // Камера ЗОВНІ кільця, стабільна композиція
   const CAM_R = 2100;
-  const CAM_PHI_BASE = 1.30;   // майже горизонт
-  const AUTO_CAM_ROT = 0.045;  // дуже повільно
+  const CAM_PHI_BASE = 1.30;   // slightly above horizon
+  const AUTO_CAM_ROT = 0.045;  // very slow orbit
 
-  // Мишка — мінімальний вплив (кінематографічно)
+  // Mouse influence is subtle (cinematic)
   const MOUSE_THETA = 0.18;
   const MOUSE_PHI = 0.10;
 
@@ -52,36 +59,42 @@ export function initMainGallery({ mountEl }) {
   let camPhi = CAM_PHI_BASE;
 
   // -----------------------------
-  // Layout (3 rows) — product-like
+  // Layout (3 rows)
   // -----------------------------
   const CARD_W = 360;
   const CARD_H = 240;
 
-  // Кільце компактне, щоб центр завжди “в кадрі”
-  const R_MID = 1020;
-  const R_TOP = 1080;
-  const R_BOT = 960;
-
-  // Ряди рознесені сильніше (менше “стеку”)
   const ROW_GAP = CARD_H * 1.05;
   const Y_MID = 0;
   const Y_TOP = +ROW_GAP;
   const Y_BOT = -ROW_GAP;
 
+  const R_MID = 1020;
+  const R_TOP = 1080;
+  const R_BOT = 960;
+
+  // Small parallax only (keeps rows aligned)
+  const SPEED_MID = 1.0;
+  const SPEED_TOP = 1.03;
+  const SPEED_BOT = 0.97;
+
   const COUNT = 36;
 
-  // Крок по колу: тримаємо “карусельність”, але не щільно
+  // Angular spacing: “carousel” but not too dense
   const GAP = 140;
   const STEP_ANGLE = (CARD_W + GAP) / R_MID;
 
-  // ✅ Жорстка видимість під ТЗ:
-  // - mid: 4 картки ([-2,-1,0,+1])
-  // - top/bot: 2 картки ([-1,0]) — підтримка, не шум
-  const VISIBLE_MID = new Set([-2, -1, 0, 1]);
-  const VISIBLE_SIDE = new Set([-1, 0]);
+  // Visibility
+  const WANT_MID = 4;
+  const WANT_SIDE = 2;
+
+  // Phases: slight offsets so it feels alive but symmetrical overall
+  const PHASE_MID = 0.35;
+  const PHASE_TOP = 0.55;
+  const PHASE_BOT = 0.15;
 
   // -----------------------------
-  // Textures (draw “glass” inside texture, keep material opaque)
+  // Textures (opaque “glass” inside texture)
   // -----------------------------
   function mulberry32(a) {
     return function () {
@@ -111,18 +124,18 @@ export function initMainGallery({ mountEl }) {
 
     const rng = mulberry32(seed);
 
-    // background (opaque, no transparency)
+    // Base background (opaque)
     g.fillStyle = "rgb(10,12,22)";
     g.fillRect(0, 0, w, h);
 
-    // subtle gradient
+    // Subtle gradient
     const grd = g.createLinearGradient(0, 0, w, h);
     grd.addColorStop(0, "rgba(90,160,255,0.20)");
     grd.addColorStop(1, "rgba(70,240,190,0.10)");
     g.fillStyle = grd;
     g.fillRect(0, 0, w, h);
 
-    // “glass plate” illusion (still opaque)
+    // Inner “glass plate” illusion (still opaque)
     g.save();
     roundedRect(g, 22, 22, w - 44, h - 44, 26);
     g.clip();
@@ -133,7 +146,7 @@ export function initMainGallery({ mountEl }) {
     g.fillStyle = glass;
     g.fillRect(0, 0, w, h);
 
-    // subtle blob
+    // Soft blob
     g.globalAlpha = 0.9;
     g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(140 + rng() * 80)},${Math.floor(
       170 + rng() * 70
@@ -151,7 +164,7 @@ export function initMainGallery({ mountEl }) {
     g.fill();
     g.globalAlpha = 1;
 
-    // vignette inside
+    // Vignette inside
     const vg = g.createRadialGradient(w * 0.55, h * 0.55, 120, w * 0.55, h * 0.55, 620);
     vg.addColorStop(0, "rgba(0,0,0,0.00)");
     vg.addColorStop(1, "rgba(0,0,0,0.55)");
@@ -160,19 +173,18 @@ export function initMainGallery({ mountEl }) {
 
     g.restore();
 
-    // border
+    // Borders
     g.strokeStyle = "rgba(232,238,252,0.28)";
     g.lineWidth = 4;
     roundedRect(g, 18, 18, w - 36, h - 36, 26);
     g.stroke();
 
-    // inner border
     g.strokeStyle = "rgba(232,238,252,0.10)";
     g.lineWidth = 2;
     roundedRect(g, 40, 40, w - 80, h - 80, 20);
     g.stroke();
 
-    // text
+    // Text
     g.fillStyle = "rgba(245,245,255,0.96)";
     g.font = "700 38px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
     g.fillText(title || "Картка", 56, 104);
@@ -192,10 +204,10 @@ export function initMainGallery({ mountEl }) {
   // -----------------------------
   const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
 
-  function createRow({ y, radius, phase, rowKind }) {
+  function buildRow({ y, radius, phase, rowKind }) {
     const group = new THREE.Group();
     group.position.y = y;
-    group.userData = { radius, phase, rowKind };
+    group.userData = { y, radius, phase, rowKind };
     scene.add(group);
 
     for (let i = 0; i < COUNT; i++) {
@@ -206,11 +218,10 @@ export function initMainGallery({ mountEl }) {
 
       const tex = makeCardTexture(item.title, item.subtitle, i * 991 + Math.floor((y + 1000) * 7));
 
-      // ✅ OPAQUE material => no transparency sorting hell
+      // Opaque material (critical for clean visuals)
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: false,
-        opacity: 1,
         side: THREE.DoubleSide,
         depthWrite: true,
         depthTest: true,
@@ -224,12 +235,12 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  const rowMid = createRow({ y: Y_MID, radius: R_MID, phase: 0.35, rowKind: "mid" });
-  const rowTop = createRow({ y: Y_TOP, radius: R_TOP, phase: 0.55, rowKind: "top" });
-  const rowBot = createRow({ y: Y_BOT, radius: R_BOT, phase: 0.15, rowKind: "bot" });
+  const rowMid = buildRow({ y: Y_MID, radius: R_MID, phase: PHASE_MID, rowKind: "mid" });
+  const rowTop = buildRow({ y: Y_TOP, radius: R_TOP, phase: PHASE_TOP, rowKind: "top" });
+  const rowBot = buildRow({ y: Y_BOT, radius: R_BOT, phase: PHASE_BOT, rowKind: "bot" });
 
   // -----------------------------
-  // Motion: scroll + snap (calm)
+  // Motion (wheel / drag) + snap
   // -----------------------------
   let scrollAngle = 0;
   let vel = 0;
@@ -239,17 +250,11 @@ export function initMainGallery({ mountEl }) {
   const DAMPING = 0.90;
   const IMPULSE_DECAY = 0.18;
 
-  // parallax per row (subtle)
-  const SPEED_MID = 1.0;
-  const SPEED_TOP = 1.08;
-  const SPEED_BOT = 0.90;
-
   const SNAP_ENABLE = true;
   const SNAP_WHEN_VEL_LT = 0.0035;
   const SNAP_LERP = 0.14;
   const SNAP_KILL_VEL = 0.84;
 
-  // input
   let down = false;
   let lastX = 0;
 
@@ -307,85 +312,84 @@ export function initMainGallery({ mountEl }) {
   onResize();
 
   // -----------------------------
-  // Focus + snap
+  // Snap helpers (mid master)
   // -----------------------------
-  function focusedIndexFromAngle(phase) {
-    const raw = -(scrollAngle + phase) / STEP_ANGLE;
+  function focusedIndexMid() {
+    const raw = -(scrollAngle + PHASE_MID) / STEP_ANGLE;
     const idx = ((Math.round(raw) % COUNT) + COUNT) % COUNT;
     return idx;
   }
 
-  function snapAngleToIndex(idx, phase) {
-    return -(idx * STEP_ANGLE + phase);
+  function snapAngleToIndexMid(idx) {
+    return -(idx * STEP_ANGLE + PHASE_MID);
   }
 
-  let focusedMid = 0;
+  // Start centered (no “first jump”)
+  scrollAngle = snapAngleToIndexMid(0);
 
   // -----------------------------
-  // Product-like styling
+  // Styling (product hierarchy)
   // -----------------------------
-  function styleByDelta(mesh, absD, rowKind) {
-    // “дорогий” фокус: центр великий, бокові менші і темніші
-    // без opacity, тільки scale + color dimming (бо матеріал opaque)
-    let baseScale = 1.0;
-    let dim = 1.0;
-
+  function styleByRank(mesh, rank, rowKind) {
     if (rowKind === "mid") {
-      baseScale = 1.10;
-      dim = 1.0;
+      const s = rank === 0 ? 1.14 : rank === 1 ? 1.06 : 0.98;
+      mesh.scale.setScalar(s);
+      const c = rank === 0 ? 1.0 : rank === 1 ? 0.85 : 0.72;
+      mesh.material.color.setScalar(c);
     } else {
-      baseScale = 0.92;
-      dim = 0.78;
+      const s = rank === 0 ? 0.92 : 0.86;
+      mesh.scale.setScalar(s);
+      const c = rank === 0 ? 0.60 : 0.52;
+      mesh.material.color.setScalar(c);
     }
-
-    // absD: 0 (центр), 1 (сусід), 2 (край для mid)
-    const t = absD === 0 ? 1 : absD === 1 ? 0.78 : 0.62;
-
-    const s = baseScale * lerp(0.92, 1.05, t);
-    mesh.scale.setScalar(s);
-
-    const c = lerp(0.62, 1.0, t) * dim;
-    mesh.material.color.setScalar(c);
   }
 
+  // -----------------------------
+  // Update row: pick nearest-to-front by angle (NOT by index delta)
+  // This guarantees center is never empty and remains symmetric.
+  // -----------------------------
   function updateRow(group, speedMul) {
     const { radius, phase, rowKind } = group.userData;
+    const want = rowKind === "mid" ? WANT_MID : WANT_SIDE;
 
-    const visibleSet = rowKind === "mid" ? VISIBLE_MID : VISIBLE_SIDE;
-    const focus = focusedMid;
-
+    // Collect candidates with their front-angle distance
+    const list = [];
     for (const mesh of group.children) {
-      if (!mesh.isMesh) continue;
-
       const i = mesh.userData.i;
-      const d = ringDelta(i, focus, COUNT);
+      const theta = i * STEP_ANGLE + scrollAngle * speedMul + phase;
+      const a = wrapPi(theta); // front is a≈0
+      list.push({ mesh, theta, absA: Math.abs(a) });
+    }
 
-      if (!visibleSet.has(d)) {
-        mesh.visible = false;
-        continue;
-      }
+    list.sort((p, q) => p.absA - q.absA);
+
+    // Hide all
+    for (const p of list) p.mesh.visible = false;
+
+    // Show & place selected
+    for (let rank = 0; rank < want; rank++) {
+      const p = list[rank];
+      const mesh = p.mesh;
       mesh.visible = true;
 
-      const theta = i * STEP_ANGLE + scrollAngle * speedMul + phase;
+      const x = Math.sin(p.theta) * radius;
+      const z = Math.cos(p.theta) * radius;
 
-      const x = Math.sin(theta) * radius;
-      const z = Math.cos(theta) * radius;
-
-      // Легка “сцена як продукт”: центральний ряд трохи попереду по Z
-      const zBias = rowKind === "mid" ? 28 : rowKind === "top" ? -6 : -10;
+      // Mid is visually dominant
+      const zBias = rowKind === "mid" ? 26 : rowKind === "top" ? -8 : -10;
 
       mesh.position.set(x, 0, z + zBias);
 
-      // Дивиться на камеру
+      // Face camera
       mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
 
-      // М’який “twist” без накопичення
-      mesh.rotation.y = -Math.sin(theta) * 0.06;
+      // Subtle twist
+      mesh.rotation.y = -Math.sin(p.theta) * 0.06;
 
-      styleByDelta(mesh, Math.abs(d), rowKind);
+      styleByRank(mesh, rank, rowKind);
 
-      // Opaque — renderOrder майже не потрібен, але хай буде стабільність
-      mesh.renderOrder = 1000 + (rowKind === "mid" ? 20 : 0) + (10 - Math.abs(d));
+      // Stable draw order (mid over side)
+      mesh.renderOrder = 1000 + (rowKind === "mid" ? 50 : 0) + (10 - rank);
     }
   }
 
@@ -398,17 +402,18 @@ export function initMainGallery({ mountEl }) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
 
+    // Physics (calm)
     vel += impulse;
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
     vel = clamp(vel, -V_MAX, V_MAX);
     vel *= Math.pow(DAMPING, dt * 60);
     scrollAngle += vel;
 
-    // mouse smoothing
+    // Mouse smoothing
     mx = lerp(mx, mxT, 1 - Math.pow(0.965, dt * 60));
     my = lerp(my, myT, 1 - Math.pow(0.965, dt * 60));
 
-    // camera orbit (very calm)
+    // Camera orbit
     const thetaBase = now * 0.001 * AUTO_CAM_ROT;
     const thetaGoal = thetaBase + mx * MOUSE_THETA;
     const phiGoal = clamp(CAM_PHI_BASE + -my * MOUSE_PHI, 1.18, 1.42);
@@ -423,16 +428,15 @@ export function initMainGallery({ mountEl }) {
     camera.position.set(sx * CAM_R, sy * CAM_R, sz * CAM_R);
     camera.lookAt(0, 0, 0);
 
-    // focus + snap (mid row is master)
-    focusedMid = focusedIndexFromAngle(rowMid.userData.phase);
-
+    // Snap to mid row (product feel)
     if (SNAP_ENABLE && !down && Math.abs(vel) < SNAP_WHEN_VEL_LT) {
-      const targetAngle = snapAngleToIndex(focusedMid, rowMid.userData.phase);
-      scrollAngle = lerp(scrollAngle, targetAngle, SNAP_LERP);
+      const idx = focusedIndexMid();
+      const target = snapAngleToIndexMid(idx);
+      scrollAngle = lerp(scrollAngle, target, SNAP_LERP);
       vel *= SNAP_KILL_VEL;
     }
 
-    // update rows
+    // Update rows
     updateRow(rowMid, SPEED_MID);
     updateRow(rowTop, SPEED_TOP);
     updateRow(rowBot, SPEED_BOT);
