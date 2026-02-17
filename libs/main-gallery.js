@@ -10,13 +10,13 @@ export function initMainGallery({ mountEl }) {
   // -----------------------------
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
-  const mod = (n, m) => ((n % m) + m) % m;
 
-  const ringDelta = (i, focus, count) => {
-    let d = i - focus;
-    d = ((d % count) + count) % count; // 0..count-1
-    if (d > count / 2) d -= count;     // -count/2..count/2
-    return d;
+  // Wrap value into (-range/2 .. range/2]
+  const wrapCentered = (x, range) => {
+    let v = x % range;
+    if (v > range / 2) v -= range;
+    if (v <= -range / 2) v += range;
+    return v;
   };
 
   // -----------------------------
@@ -35,32 +35,38 @@ export function initMainGallery({ mountEl }) {
   // Scene / Camera
   // -----------------------------
   const scene = new THREE.Scene();
-
-  // Premium-ish FOV
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 9000);
 
-  // Camera baseline
-  const CAM_Z = 1450;
+  const CAM_Z = 1400;
   const CAM_Y = 120;
 
-  // Subtle drift (won't break center because lookAt is always (0,0,0))
+  // Subtle drift (doesn't break center because lookAt(0,0,0))
   const DRIFT_SPD = 0.18;
-  const DRIFT_X = 22;
-  const DRIFT_Y = 16;
+  const DRIFT_X = 18;
+  const DRIFT_Y = 14;
 
-  // Mouse influence (tiny)
-  const MOUSE_X = 36;
-  const MOUSE_Y = 24;
+  // Tiny mouse parallax
+  const MOUSE_X = 28;
+  const MOUSE_Y = 20;
   let mx = 0, my = 0, mxT = 0, myT = 0;
 
+  function onMouseMove(e) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / r.width;
+    const ny = (e.clientY - r.top) / r.height;
+    mxT = (nx - 0.5) * 2;
+    myT = (0.5 - ny) * 2;
+  }
+  window.addEventListener("mousemove", onMouseMove, { passive: true });
+
   // -----------------------------
-  // Layout: 3 straight rows
+  // Layout: 3 straight belts
   // -----------------------------
   const CARD_W = 360;
   const CARD_H = 240;
 
-  // “середньо” spacing (tweakable)
-  const GAP_X = 110;
+  // “середньо” spacing у mid
+  const GAP_X = 120;
   const STEP_X = CARD_W + GAP_X;
 
   const ROW_GAP = CARD_H * 1.05;
@@ -68,13 +74,27 @@ export function initMainGallery({ mountEl }) {
   const Y_TOP = +ROW_GAP;
   const Y_BOT = -ROW_GAP;
 
-  // Straight rows: only a tiny depth layering by row (not curved per-card)
+  // small depth layering per row (row stays straight)
   const Z_MID = 0;
-  const Z_TOP = -90;
-  const Z_BOT = -110;
+  const Z_TOP = -95;
+  const Z_BOT = -115;
 
-  // How many cards exist (loop)
   const COUNT = 36;
+  const BELT_LEN = COUNT * STEP_X;
+
+  // Visibility windows (strict)
+  // mid: max 4 cards => window roughly [-1.5..+2.5] steps
+  const MID_MIN_X = -1.55 * STEP_X;
+  const MID_MAX_X = +2.55 * STEP_X;
+
+  // top/bot: max 2 cards => window roughly [-0.6..+1.6] steps
+  const SIDE_MIN_X = -0.60 * STEP_X;
+  const SIDE_MAX_X = +1.60 * STEP_X;
+
+  // Row parallax (subtle)
+  const SPEED_MID = 1.0;
+  const SPEED_TOP = 1.04;
+  const SPEED_BOT = 0.96;
 
   // -----------------------------
   // Textures (opaque)
@@ -175,14 +195,14 @@ export function initMainGallery({ mountEl }) {
   }
 
   // -----------------------------
-  // Build rows
+  // Build row belts
   // -----------------------------
   const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
 
-  function buildRow({ y, zBase, rowKind }) {
+  function buildRow({ y, z, rowKind, phaseSteps }) {
     const group = new THREE.Group();
-    group.position.set(0, y, zBase);
-    group.userData = { rowKind };
+    group.position.set(0, y, z);
+    group.userData = { rowKind, phaseSteps };
     scene.add(group);
 
     for (let i = 0; i < COUNT; i++) {
@@ -191,7 +211,11 @@ export function initMainGallery({ mountEl }) {
           ? GALLERY_ITEMS[i % GALLERY_ITEMS.length]
           : { title: `Картка ${i + 1}`, subtitle: "Модуль / Епізод" };
 
-      const tex = makeCardTexture(item.title, item.subtitle, i * 991 + Math.floor((y + 1000) * 7));
+      const tex = makeCardTexture(
+        item.title,
+        item.subtitle,
+        i * 991 + Math.floor((y + 1000) * 7)
+      );
 
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
@@ -209,42 +233,34 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  const rowMid = buildRow({ y: Y_MID, zBase: Z_MID, rowKind: "mid" });
-  const rowTop = buildRow({ y: Y_TOP, zBase: Z_TOP, rowKind: "top" });
-  const rowBot = buildRow({ y: Y_BOT, zBase: Z_BOT, rowKind: "bot" });
+  // Phase offsets so rows don't “stack” vertically at the same X
+  const rowMid = buildRow({ y: Y_MID, z: Z_MID, rowKind: "mid", phaseSteps: 0.0 });
+  const rowTop = buildRow({ y: Y_TOP, z: Z_TOP, rowKind: "top", phaseSteps: 0.55 });
+  const rowBot = buildRow({ y: Y_BOT, z: Z_BOT, rowKind: "bot", phaseSteps: 0.25 });
 
   // -----------------------------
-  // Motion: scroll in STEPS + snap
+  // Motion: scrollX with inertia + snap to nearest card center
   // -----------------------------
-  let scrollSteps = 0; // 0 => card 0 centered
+  let scrollX = 0;     // pixels along belt
   let vel = 0;
   let impulse = 0;
 
-  const V_MAX = 0.060;
+  const V_MAX = 2.8;         // px/frame-ish (we’ll scale by dt)
   const DAMPING = 0.90;
   const IMPULSE_DECAY = 0.18;
 
   const SNAP_ENABLE = true;
-  const SNAP_WHEN_VEL_LT = 0.006;
-  const SNAP_LERP = 0.18;
-  const SNAP_KILL_VEL = 0.80;
+  const SNAP_WHEN_VEL_LT = 18;   // px/sec threshold
+  const SNAP_LERP = 0.20;
+  const SNAP_KILL_VEL = 0.78;
 
-  // Input
   let down = false;
   let lastX = 0;
-
-  function onMouseMove(e) {
-    const r = renderer.domElement.getBoundingClientRect();
-    const nx = (e.clientX - r.left) / r.width;
-    const ny = (e.clientY - r.top) / r.height;
-    mxT = (nx - 0.5) * 2;
-    myT = (0.5 - ny) * 2;
-  }
 
   function onWheel(e) {
     e.preventDefault();
     const d = clamp(e.deltaY, -120, 120);
-    impulse += d * 0.0012;
+    impulse += d * 2.2; // wheel -> px impulse
   }
 
   function onPointerDown(e) {
@@ -256,14 +272,13 @@ export function initMainGallery({ mountEl }) {
     if (!down) return;
     const dx = e.clientX - lastX;
     lastX = e.clientX;
-    impulse += -dx / 1400;
+    impulse += -dx * 2.0;
   }
 
   function onPointerUp() {
     down = false;
   }
 
-  window.addEventListener("mousemove", onMouseMove, { passive: true });
   renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("pointerdown", onPointerDown, { passive: true });
   window.addEventListener("pointermove", onPointerMove, { passive: true });
@@ -284,71 +299,76 @@ export function initMainGallery({ mountEl }) {
   onResize();
 
   // -----------------------------
-  // Visibility policy (strict)
+  // Styling (product-like)
   // -----------------------------
-  function focusIndex() {
-    return mod(Math.round(scrollSteps), COUNT);
-  }
+  function styleByX(mesh, x, rowKind) {
+    const ax = Math.abs(x);
 
-  function midOffsets(dir) {
-    // exactly 4 visible in mid, always centered by snap
-    if (dir < -0.2) return [-2, -1, 0, +1];
-    return [-1, 0, +1, +2];
-  }
-
-  function sideOffsets(dir) {
-    // exactly 2 visible on top/bot
-    if (dir < -0.2) return [0, -1];
-    return [0, +1];
-  }
-
-  function styleByAbsDelta(mesh, absD, rowKind) {
     if (rowKind === "mid") {
-      const s = absD === 0 ? 1.14 : absD === 1 ? 1.04 : 0.94;
-      const c = absD === 0 ? 1.0 : absD === 1 ? 0.82 : 0.68;
+      // center hero
+      const t = clamp(1 - ax / (2.2 * STEP_X), 0, 1);
+      const s = lerp(0.94, 1.14, t);
+      const c = lerp(0.68, 1.00, t);
       mesh.scale.setScalar(s);
       mesh.material.color.setScalar(c);
     } else {
-      const s = absD === 0 ? 0.92 : 0.86;
-      const c = absD === 0 ? 0.58 : 0.50;
+      // support rows
+      const t = clamp(1 - ax / (1.4 * STEP_X), 0, 1);
+      const s = lerp(0.84, 0.92, t);
+      const c = lerp(0.48, 0.60, t);
       mesh.scale.setScalar(s);
       mesh.material.color.setScalar(c);
     }
   }
 
-  function updateRow(group, speedMul, dir) {
-    const { rowKind } = group.userData;
+  // -----------------------------
+  // Row update (straight belt)
+  // -----------------------------
+  function updateRow(group, speedMul) {
+    const { rowKind, phaseSteps } = group.userData;
 
-    const focus = focusIndex();
-    const frac = scrollSteps - Math.round(scrollSteps);
+    const sX = scrollX * speedMul + phaseSteps * STEP_X;
 
-    const offsets = rowKind === "mid" ? midOffsets(dir) : sideOffsets(dir);
-    const visible = new Set(offsets);
+    const minX = rowKind === "mid" ? MID_MIN_X : SIDE_MIN_X;
+    const maxX = rowKind === "mid" ? MID_MAX_X : SIDE_MAX_X;
 
     for (const mesh of group.children) {
       const i = mesh.userData.i;
-      const d = ringDelta(i, focus, COUNT);
 
-      if (!visible.has(d)) {
+      // base position along belt
+      const base = i * STEP_X;
+
+      // subtract scroll, then wrap to centered range around 0
+      const x = wrapCentered(base - sX, BELT_LEN);
+
+      if (x < minX || x > maxX) {
         mesh.visible = false;
         continue;
       }
       mesh.visible = true;
 
-      // ✅ STRAIGHT ROWS: no curve, pure X movement
-      const x = (d - frac) * STEP_X * speedMul;
-
       mesh.position.set(x, 0, 0);
 
-      // Face camera + tiny yaw for “depth”, but keep row straight
+      // face camera (keeps the “premium glass” feel)
       mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
-      mesh.rotation.y += clamp(x / 4200, -0.14, 0.14);
 
-      const absD = Math.abs(d);
-      styleByAbsDelta(mesh, absD, rowKind);
+      // subtle yaw, but keep row straight
+      mesh.rotation.y += clamp(x / 4200, -0.12, 0.12);
 
-      mesh.renderOrder = 1000 + (rowKind === "mid" ? 60 : 0) + (10 - absD);
+      styleByX(mesh, x, rowKind);
+
+      // stable ordering: mid above
+      mesh.renderOrder = 1000 + (rowKind === "mid" ? 80 : 0) + (10 - Math.round(Math.abs(x) / STEP_X));
     }
+  }
+
+  // Snap target for center card (mid row master)
+  function nearestSnapX() {
+    // Find which card center is closest to x=0 for mid row.
+    // We can compute current center in steps:
+    const steps = scrollX / STEP_X;
+    const nearest = Math.round(steps);
+    return nearest * STEP_X;
   }
 
   // -----------------------------
@@ -360,22 +380,25 @@ export function initMainGallery({ mountEl }) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
 
-    vel += impulse;
+    // inertia in px/sec domain
+    // impulse is in px “kick”, integrate into velocity
+    vel += impulse * (dt * 60);
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
-    vel = clamp(vel, -V_MAX, V_MAX);
-    vel *= Math.pow(DAMPING, dt * 60);
-    scrollSteps += vel;
 
-    // keep bounded
-    if (scrollSteps > 1e6 || scrollSteps < -1e6) {
-      scrollSteps = mod(scrollSteps, COUNT);
-    }
+    // clamp vel (px/sec)
+    vel = clamp(vel, -V_MAX * 60, V_MAX * 60);
+    vel *= Math.pow(DAMPING, dt * 60);
+
+    scrollX += vel * dt;
+
+    // keep scrollX bounded
+    if (scrollX > 1e7 || scrollX < -1e7) scrollX = wrapCentered(scrollX, BELT_LEN);
 
     // mouse smoothing
     mx = lerp(mx, mxT, 1 - Math.pow(0.965, dt * 60));
     my = lerp(my, myT, 1 - Math.pow(0.965, dt * 60));
 
-    // camera drift (subtle)
+    // camera drift
     const t = now * 0.001;
     const driftX = Math.sin(t * DRIFT_SPD) * DRIFT_X;
     const driftY = Math.cos(t * DRIFT_SPD * 0.9) * DRIFT_Y;
@@ -383,18 +406,16 @@ export function initMainGallery({ mountEl }) {
     camera.position.set(driftX + mx * MOUSE_X, CAM_Y + driftY + -my * MOUSE_Y, CAM_Z);
     camera.lookAt(0, 0, 0);
 
-    // snap to center
+    // snap
     if (SNAP_ENABLE && !down && Math.abs(vel) < SNAP_WHEN_VEL_LT) {
-      const target = Math.round(scrollSteps);
-      scrollSteps = lerp(scrollSteps, target, SNAP_LERP);
+      const target = nearestSnapX();
+      scrollX = lerp(scrollX, target, SNAP_LERP);
       vel *= SNAP_KILL_VEL;
     }
 
-    const dir = vel;
-
-    updateRow(rowMid, 1.0, dir);
-    updateRow(rowTop, 1.02, dir);
-    updateRow(rowBot, 0.98, dir);
+    updateRow(rowMid, SPEED_MID);
+    updateRow(rowTop, SPEED_TOP);
+    updateRow(rowBot, SPEED_BOT);
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
