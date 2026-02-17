@@ -26,17 +26,15 @@ export function initMainGallery({ mountEl }) {
 
   // ---------- scene & camera ----------
   const scene = new THREE.Scene();
-
-  // ❌ fog прибираємо (він робив все “димним”)
   scene.fog = null;
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
 
-  // Камера на орбіті навколо осі Y (кінематографічно повільно)
-  const CAM_R = 1850; // радіус орбіти (камера ЗОВНІ кільця)
-  const CAM_PHI_BASE = 1.10; // вертикальний кут (≈63° від +Y)
-  const CAM_THETA_BASE = 0.0; // базовий азимут
-  const AUTO_CAM_ROT = 0.06; // рад/с — дуже повільний автоповорот
+  // ✅ camera orbit (fixed)
+  const CAM_R = 1250;        // ✅ було 1850: занадто далеко
+  const CAM_PHI_BASE = 1.42; // ✅ було 1.10: занадто "зверху"
+  const CAM_THETA_BASE = 0.0;
+  const AUTO_CAM_ROT = 0.06; // рад/с — дуже повільно
 
   let camTheta = CAM_THETA_BASE;
   let camPhi = CAM_PHI_BASE;
@@ -48,7 +46,6 @@ export function initMainGallery({ mountEl }) {
   const CARD_W = 360;
   const CARD_H = 240;
 
-  // ✅ збільшуємо радіуси (менше накладання)
   const R_MID = 1180;
   const R_BOT = 1240;
   const R_TOP = 1300;
@@ -59,12 +56,11 @@ export function initMainGallery({ mountEl }) {
 
   const COUNT = 36;
 
-  // ✅ збільшуємо gap (менше накладання)
   const GAP = 300;
   const STEP_ANGLE = (CARD_W + GAP) / R_MID;
 
-  // ✅ ширший “читабельний” сектор => менше різкого fade
-  const READABLE_DEG = 55;
+  // ✅ readable сектор (<=4 картки у фокусі)
+  const READABLE_DEG = 34; // ✅ було 55: давав "вінок" по краях
   const READABLE_RAD = (READABLE_DEG * Math.PI) / 180;
 
   const FADE_START = READABLE_RAD * 0.55;
@@ -81,8 +77,7 @@ export function initMainGallery({ mountEl }) {
   }
 
   function makeCardTexture(title, subtitle, seed) {
-    const w = 768,
-      h = 512;
+    const w = 768, h = 512;
     const c = document.createElement("canvas");
     c.width = w;
     c.height = h;
@@ -97,14 +92,7 @@ export function initMainGallery({ mountEl }) {
     g.fillStyle = grd;
     g.fillRect(0, 0, w, h);
 
-    const vg = g.createRadialGradient(
-      w * 0.55,
-      h * 0.55,
-      80,
-      w * 0.55,
-      h * 0.55,
-      460
-    );
+    const vg = g.createRadialGradient(w * 0.55, h * 0.55, 80, w * 0.55, h * 0.55, 460);
     vg.addColorStop(0, "rgba(0,0,0,0)");
     vg.addColorStop(1, "rgba(0,0,0,0.62)");
     g.fillStyle = vg;
@@ -116,9 +104,7 @@ export function initMainGallery({ mountEl }) {
 
     const rng = mulberry32(seed);
     g.globalAlpha = 0.95;
-    g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(
-      140 + rng() * 80
-    )},${Math.floor(170 + rng() * 70)},0.36)`;
+    g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(140 + rng() * 80)},${Math.floor(170 + rng() * 70)},0.36)`;
     g.beginPath();
     g.ellipse(
       w * 0.62,
@@ -152,6 +138,8 @@ export function initMainGallery({ mountEl }) {
   function createRow({ y, radius, phase, rowKind }) {
     const group = new THREE.Group();
     group.position.y = y;
+    group.userData.phase = phase;
+    group.userData.rowKind = rowKind;
     scene.add(group);
 
     for (let i = 0; i < COUNT; i++) {
@@ -160,24 +148,20 @@ export function initMainGallery({ mountEl }) {
           ? GALLERY_ITEMS[i % GALLERY_ITEMS.length]
           : { title: `Картка ${i + 1}`, subtitle: "Модуль" };
 
-      const tex = makeCardTexture(
-        item.title,
-        item.subtitle,
-        i * 997 + Math.floor((y + 999) * 10)
-      );
+      const tex = makeCardTexture(item.title, item.subtitle, i * 997 + Math.floor((y + 999) * 10));
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
         opacity: 1,
         side: THREE.DoubleSide,
-        depthWrite: false,
+        depthWrite: false, // ✅ важливо для прозорості
       });
 
       const mesh = new THREE.Mesh(planeGeo, mat);
       mesh.userData = { i, radius, phase, rowKind };
       group.add(mesh);
 
-      // рамка — трохи сильніша
+      // frame overlay
       const frame = new THREE.Mesh(
         new THREE.PlaneGeometry(CARD_W + 18, CARD_H + 18),
         new THREE.MeshBasicMaterial({
@@ -205,27 +189,24 @@ export function initMainGallery({ mountEl }) {
   let impulse = 0;
 
   const V_MAX = 0.032;
-  const DAMPING = 0.9; // інерція (трохи менше "дрібного тремтіння")
+  const DAMPING = 0.9;
   const IMPULSE_DECAY = 0.18;
 
-  // ❌ авто-дрифт = 0 (щоб "само по собі" не їхало)
   const AUTO_DRIFT = 0;
 
-  // Snap (стабільний)
+  // snap
   const SNAP_ENABLE = true;
-  const SNAP_WHEN_VEL_LT = 0.004; // поріг швидкості
-  const SNAP_LERP = 0.1; // як швидко прилипає
-  const SNAP_KILL_VEL = 0.88; // гасить vel при снапі
+  const SNAP_WHEN_VEL_LT = 0.004;
+  const SNAP_LERP = 0.1;
+  const SNAP_KILL_VEL = 0.88;
 
   const SPEED_MID = 1.0;
   const SPEED_BOT = 0.86;
   const SPEED_TOP = 1.12;
 
-  // mouse control (м'яка інерція)
-  let mx = 0,
-    my = 0;
-  let mxT = 0,
-    myT = 0;
+  // mouse control (smooth)
+  let mx = 0, my = 0;
+  let mxT = 0, myT = 0;
   let thetaT = 0;
   let phiT = 0;
 
@@ -281,10 +262,8 @@ export function initMainGallery({ mountEl }) {
   window.addEventListener("resize", onResize);
   onResize();
 
-  // ---------- stable snap target (без “фліпу”) ----------
+  // ---------- snap target ----------
   function nearestIndexAndTarget(phase) {
-    // theta = i*STEP + scrollPos*SPEED + phase;  хочемо theta≈0
-    // i ≈ -(scrollPos*SPEED + phase) / STEP
     const raw = -(scrollPos * SPEED_MID + phase) / STEP_ANGLE;
     const idx = ((Math.round(raw) % COUNT) + COUNT) % COUNT;
     const target = -((idx * STEP_ANGLE + phase) / SPEED_MID);
@@ -294,7 +273,6 @@ export function initMainGallery({ mountEl }) {
   function applyStyle(mesh, absAngle, rowKind, isFocused) {
     const tFade = 1 - smoothstep(FADE_START, FADE_END, absAngle);
 
-    // ✅ видимість піднята
     let baseOpacity = 1.0;
     let baseScale = 1.0;
 
@@ -313,9 +291,8 @@ export function initMainGallery({ mountEl }) {
 
     const focusBoost = isFocused ? 1.08 : 1.0;
 
-    const minO = 0.0; // дозволяємо зникати повністю (без "примар")
+    const minO = 0.0;
     const maxO = baseOpacity;
-
     mesh.material.opacity = lerp(minO, maxO, tFade);
 
     const minS = baseScale * 0.86;
@@ -324,6 +301,8 @@ export function initMainGallery({ mountEl }) {
 
     mesh.visible = absAngle < FADE_END * 1.05;
   }
+
+  let focusedIndex = 0;
 
   function updateRow(group, speedMul, rowKind) {
     const phase = group.userData.phase;
@@ -343,10 +322,10 @@ export function initMainGallery({ mountEl }) {
 
       mesh.position.set(x, 0, z);
 
-      // "картка дивиться на камеру"
+      // face camera
       mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
 
-      // легкий twist
+      // ✅ no accumulation — stable
       mesh.rotation.y = -a * 0.08;
 
       const isFocused = rowKind === "mid" && i === focusedIndex;
@@ -354,15 +333,9 @@ export function initMainGallery({ mountEl }) {
     }
   }
 
-  // фіксуємо phase на групі (простішe)
-  rowMid.userData.phase = 0.35;
-  rowBot.userData.phase = 0.18;
-  rowTop.userData.phase = 0.52;
-
-  let focusedIndex = 0;
-
   // ---------- loop ----------
   let lastT = performance.now();
+
   function tick(now) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
@@ -376,24 +349,21 @@ export function initMainGallery({ mountEl }) {
 
     scrollPos += vel;
 
-    // mouse smoothing (менший вплив)
+    // mouse smoothing
     mx = lerp(mx, mxT, 1 - Math.pow(0.965, dt * 60));
     my = lerp(my, myT, 1 - Math.pow(0.965, dt * 60));
 
-    // автооберт навколо осі (повільно)
+    // auto orbit around Y
     const thetaBase = now * 0.001 * AUTO_CAM_ROT;
 
-    // цільові офсети від мишки (дуже м'яко)
-    thetaT = mx * 0.35; // горизонтальний вплив
-    phiT = clamp(CAM_PHI_BASE + -my * 0.18, 0.95, 1.28);
+    thetaT = mx * 0.35;
+    phiT = clamp(CAM_PHI_BASE + -my * 0.18, 1.10, 1.52); // ✅ під нову базу
 
     const thetaGoal = thetaBase + thetaT;
 
-    // інерційне наближення до цілі
     camTheta = lerp(camTheta, thetaGoal, 1 - Math.pow(0.92, dt * 60));
     camPhi = lerp(camPhi, phiT, 1 - Math.pow(0.92, dt * 60));
 
-    // spherical -> cartesian
     const sx = Math.sin(camPhi) * Math.sin(camTheta);
     const sy = Math.cos(camPhi);
     const sz = Math.sin(camPhi) * Math.cos(camTheta);
@@ -401,7 +371,7 @@ export function initMainGallery({ mountEl }) {
     camera.position.set(sx * CAM_R, sy * CAM_R, sz * CAM_R);
     camera.lookAt(0, 0, 0);
 
-    // ✅ стабільний snap
+    // snap
     const snap = nearestIndexAndTarget(rowMid.userData.phase);
     focusedIndex = snap.idx;
 
@@ -417,6 +387,7 @@ export function initMainGallery({ mountEl }) {
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
   }
+
   requestAnimationFrame(tick);
 
   return {
