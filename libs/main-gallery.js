@@ -2,14 +2,6 @@
 import * as THREE from "three";
 import { GALLERY_ITEMS } from "./data.js";
 
-/**
- * KAYA — Main Gallery (RAIL / CONVEYOR)
- * 3 rows, mid is master, infinite loop, snap centers a card.
- * Mid: max 4 visible ([-1,0,+1] + one extra in travel direction)
- * Top/Bot: 2 visible ([0] + one in travel direction)
- * Opaque materials only (no transparency sorting issues).
- * Camera: subtle drift that never breaks the centered composition.
- */
 export function initMainGallery({ mountEl }) {
   if (!mountEl) throw new Error("initMainGallery: mountEl is required");
 
@@ -22,8 +14,8 @@ export function initMainGallery({ mountEl }) {
 
   const ringDelta = (i, focus, count) => {
     let d = i - focus;
-    d = ((d % count) + count) % count;
-    if (d > count / 2) d -= count;
+    d = ((d % count) + count) % count; // 0..count-1
+    if (d > count / 2) d -= count;     // -count/2..count/2
     return d;
   };
 
@@ -44,57 +36,45 @@ export function initMainGallery({ mountEl }) {
   // -----------------------------
   const scene = new THREE.Scene();
 
-  // “Premium” FOV
+  // Premium-ish FOV
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 9000);
 
-  // Camera tuned for proper scale (fixes “everything too small / far away”)
-  const CAM_Z = 1500;
-  const CAM_Y = 140;
+  // Camera baseline
+  const CAM_Z = 1450;
+  const CAM_Y = 120;
 
-  // Drift (subtle; does NOT shift center composition because we always lookAt(0,0,0))
+  // Subtle drift (won't break center because lookAt is always (0,0,0))
   const DRIFT_SPD = 0.18;
-  const DRIFT_X = 26;
-  const DRIFT_Y = 18;
+  const DRIFT_X = 22;
+  const DRIFT_Y = 16;
 
   // Mouse influence (tiny)
-  const MOUSE_X = 42;
-  const MOUSE_Y = 28;
-  let mx = 0,
-    my = 0,
-    mxT = 0,
-    myT = 0;
+  const MOUSE_X = 36;
+  const MOUSE_Y = 24;
+  let mx = 0, my = 0, mxT = 0, myT = 0;
 
   // -----------------------------
-  // Layout / Rows
+  // Layout: 3 straight rows
   // -----------------------------
   const CARD_W = 360;
   const CARD_H = 240;
 
-  // “середньо” spacing
-  const GAP_X = 90;
+  // “середньо” spacing (tweakable)
+  const GAP_X = 110;
   const STEP_X = CARD_W + GAP_X;
 
-  // 3 rows
   const ROW_GAP = CARD_H * 1.05;
   const Y_MID = 0;
   const Y_TOP = +ROW_GAP;
   const Y_BOT = -ROW_GAP;
 
-  // depth layers
+  // Straight rows: only a tiny depth layering by row (not curved per-card)
   const Z_MID = 0;
-  const Z_TOP = -120;
-  const Z_BOT = -150;
+  const Z_TOP = -90;
+  const Z_BOT = -110;
 
-  // subtle design tilt
-  const TILT_TOP = 0.05;
-  const TILT_BOT = -0.05;
-
-  // Data count (loop)
+  // How many cards exist (loop)
   const COUNT = 36;
-
-  // Visibility constraints (strict)
-  const MID_MAX_VISIBLE = 4;
-  const SIDE_VISIBLE = 2;
 
   // -----------------------------
   // Textures (opaque)
@@ -120,49 +100,35 @@ export function initMainGallery({ mountEl }) {
   }
 
   function makeCardTexture(title, subtitle, seed) {
-    const w = 768,
-      h = 512;
+    const w = 768, h = 512;
     const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
+    c.width = w; c.height = h;
     const g = c.getContext("2d");
-
     const rng = mulberry32(seed);
 
-    // base
     g.fillStyle = "rgb(10,12,22)";
     g.fillRect(0, 0, w, h);
 
-    // subtle gradient
     const grd = g.createLinearGradient(0, 0, w, h);
     grd.addColorStop(0, "rgba(90,160,255,0.20)");
     grd.addColorStop(1, "rgba(70,240,190,0.10)");
     g.fillStyle = grd;
     g.fillRect(0, 0, w, h);
 
-    // glass plate illusion (still opaque)
     g.save();
     roundedRect(g, 22, 22, w - 44, h - 44, 26);
     g.clip();
 
-    const glass = g.createRadialGradient(
-      w * 0.55,
-      h * 0.45,
-      80,
-      w * 0.55,
-      h * 0.45,
-      520
-    );
+    const glass = g.createRadialGradient(w * 0.55, h * 0.45, 80, w * 0.55, h * 0.45, 520);
     glass.addColorStop(0, "rgba(255,255,255,0.10)");
     glass.addColorStop(1, "rgba(255,255,255,0.02)");
     g.fillStyle = glass;
     g.fillRect(0, 0, w, h);
 
-    // blob
     g.globalAlpha = 0.9;
-    g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(
-      140 + rng() * 80
-    )},${Math.floor(170 + rng() * 70)},0.30)`;
+    g.fillStyle = `rgba(${Math.floor(120 + rng() * 100)},${Math.floor(140 + rng() * 80)},${Math.floor(
+      170 + rng() * 70
+    )},0.30)`;
     g.beginPath();
     g.ellipse(
       w * 0.66,
@@ -176,15 +142,7 @@ export function initMainGallery({ mountEl }) {
     g.fill();
     g.globalAlpha = 1;
 
-    // inner vignette
-    const vg = g.createRadialGradient(
-      w * 0.55,
-      h * 0.55,
-      120,
-      w * 0.55,
-      h * 0.55,
-      620
-    );
+    const vg = g.createRadialGradient(w * 0.55, h * 0.55, 120, w * 0.55, h * 0.55, 620);
     vg.addColorStop(0, "rgba(0,0,0,0.00)");
     vg.addColorStop(1, "rgba(0,0,0,0.55)");
     g.fillStyle = vg;
@@ -192,7 +150,6 @@ export function initMainGallery({ mountEl }) {
 
     g.restore();
 
-    // borders
     g.strokeStyle = "rgba(232,238,252,0.28)";
     g.lineWidth = 4;
     roundedRect(g, 18, 18, w - 36, h - 36, 26);
@@ -203,7 +160,6 @@ export function initMainGallery({ mountEl }) {
     roundedRect(g, 40, 40, w - 80, h - 80, 20);
     g.stroke();
 
-    // text
     g.fillStyle = "rgba(245,245,255,0.96)";
     g.font = "700 38px Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial";
     g.fillText(title || "Картка", 56, 104);
@@ -223,10 +179,10 @@ export function initMainGallery({ mountEl }) {
   // -----------------------------
   const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
 
-  function buildRow({ y, zBase, tilt, rowKind }) {
+  function buildRow({ y, zBase, rowKind }) {
     const group = new THREE.Group();
     group.position.set(0, y, zBase);
-    group.userData = { rowKind, tilt };
+    group.userData = { rowKind };
     scene.add(group);
 
     for (let i = 0; i < COUNT; i++) {
@@ -237,7 +193,6 @@ export function initMainGallery({ mountEl }) {
 
       const tex = makeCardTexture(item.title, item.subtitle, i * 991 + Math.floor((y + 1000) * 7));
 
-      // Opaque material (critical)
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: false,
@@ -254,15 +209,14 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  const rowMid = buildRow({ y: Y_MID, zBase: Z_MID, tilt: 0.0, rowKind: "mid" });
-  const rowTop = buildRow({ y: Y_TOP, zBase: Z_TOP, tilt: TILT_TOP, rowKind: "top" });
-  const rowBot = buildRow({ y: Y_BOT, zBase: Z_BOT, tilt: TILT_BOT, rowKind: "bot" });
+  const rowMid = buildRow({ y: Y_MID, zBase: Z_MID, rowKind: "mid" });
+  const rowTop = buildRow({ y: Y_TOP, zBase: Z_TOP, rowKind: "top" });
+  const rowBot = buildRow({ y: Y_BOT, zBase: Z_BOT, rowKind: "bot" });
 
   // -----------------------------
-  // Motion: scroll in “steps” + snap
+  // Motion: scroll in STEPS + snap
   // -----------------------------
-  // scrollSteps: 0 => card 0 centered; 1 => card 1 centered, etc.
-  let scrollSteps = 0;
+  let scrollSteps = 0; // 0 => card 0 centered
   let vel = 0;
   let impulse = 0;
 
@@ -274,9 +228,6 @@ export function initMainGallery({ mountEl }) {
   const SNAP_WHEN_VEL_LT = 0.006;
   const SNAP_LERP = 0.18;
   const SNAP_KILL_VEL = 0.80;
-
-  // Start centered, no jump
-  scrollSteps = 0;
 
   // Input
   let down = false;
@@ -305,7 +256,7 @@ export function initMainGallery({ mountEl }) {
     if (!down) return;
     const dx = e.clientX - lastX;
     lastX = e.clientX;
-    impulse += -dx / 1400; // premium drag
+    impulse += -dx / 1400;
   }
 
   function onPointerUp() {
@@ -333,21 +284,20 @@ export function initMainGallery({ mountEl }) {
   onResize();
 
   // -----------------------------
-  // Visibility policy
+  // Visibility policy (strict)
   // -----------------------------
   function focusIndex() {
     return mod(Math.round(scrollSteps), COUNT);
   }
 
   function midOffsets(dir) {
-    // strict max 4 visible in mid
-    // show [-1,0,+1] always + one extra in direction
+    // exactly 4 visible in mid, always centered by snap
     if (dir < -0.2) return [-2, -1, 0, +1];
     return [-1, 0, +1, +2];
   }
 
   function sideOffsets(dir) {
-    // strict 2 visible (supporting)
+    // exactly 2 visible on top/bot
     if (dir < -0.2) return [0, -1];
     return [0, +1];
   }
@@ -366,14 +316,11 @@ export function initMainGallery({ mountEl }) {
     }
   }
 
-  // -----------------------------
-  // Update row (Rail with subtle depth curve)
-  // -----------------------------
   function updateRow(group, speedMul, dir) {
-    const { rowKind, tilt } = group.userData;
+    const { rowKind } = group.userData;
 
     const focus = focusIndex();
-    const frac = scrollSteps - Math.round(scrollSteps); // fractional movement for smoothness
+    const frac = scrollSteps - Math.round(scrollSteps);
 
     const offsets = rowKind === "mid" ? midOffsets(dir) : sideOffsets(dir);
     const visible = new Set(offsets);
@@ -388,25 +335,18 @@ export function initMainGallery({ mountEl }) {
       }
       mesh.visible = true;
 
-      // x positions around center, keeping focus at x=0 when snapped
+      // ✅ STRAIGHT ROWS: no curve, pure X movement
       const x = (d - frac) * STEP_X * speedMul;
 
-      // subtle depth curve: cards away from center sit slightly back
-      const absD = Math.abs(d);
-      const zCurve = -absD * 26;
+      mesh.position.set(x, 0, 0);
 
-      mesh.position.set(x, 0, zCurve);
-
-      // face camera
+      // Face camera + tiny yaw for “depth”, but keep row straight
       mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
+      mesh.rotation.y += clamp(x / 4200, -0.14, 0.14);
 
-      // reset then add design tilt + slight yaw (no accumulation)
-      mesh.rotation.z += tilt;
-      mesh.rotation.y += clamp(x / 3800, -0.18, 0.18);
-
+      const absD = Math.abs(d);
       styleByAbsDelta(mesh, absD, rowKind);
 
-      // stable order: mid always above
       mesh.renderOrder = 1000 + (rowKind === "mid" ? 60 : 0) + (10 - absD);
     }
   }
@@ -420,14 +360,13 @@ export function initMainGallery({ mountEl }) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
 
-    // physics
     vel += impulse;
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
     vel = clamp(vel, -V_MAX, V_MAX);
     vel *= Math.pow(DAMPING, dt * 60);
     scrollSteps += vel;
 
-    // keep bounded (still infinite visually)
+    // keep bounded
     if (scrollSteps > 1e6 || scrollSteps < -1e6) {
       scrollSteps = mod(scrollSteps, COUNT);
     }
@@ -436,26 +375,21 @@ export function initMainGallery({ mountEl }) {
     mx = lerp(mx, mxT, 1 - Math.pow(0.965, dt * 60));
     my = lerp(my, myT, 1 - Math.pow(0.965, dt * 60));
 
-    // camera drift (premium) + mouse (tiny)
+    // camera drift (subtle)
     const t = now * 0.001;
     const driftX = Math.sin(t * DRIFT_SPD) * DRIFT_X;
     const driftY = Math.cos(t * DRIFT_SPD * 0.9) * DRIFT_Y;
 
-    camera.position.set(
-      driftX + mx * MOUSE_X,
-      CAM_Y + driftY + -my * MOUSE_Y,
-      CAM_Z
-    );
+    camera.position.set(driftX + mx * MOUSE_X, CAM_Y + driftY + -my * MOUSE_Y, CAM_Z);
     camera.lookAt(0, 0, 0);
 
-    // snap: center focus card
+    // snap to center
     if (SNAP_ENABLE && !down && Math.abs(vel) < SNAP_WHEN_VEL_LT) {
       const target = Math.round(scrollSteps);
       scrollSteps = lerp(scrollSteps, target, SNAP_LERP);
       vel *= SNAP_KILL_VEL;
     }
 
-    // direction of travel
     const dir = vel;
 
     updateRow(rowMid, 1.0, dir);
