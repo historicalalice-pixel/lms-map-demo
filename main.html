@@ -3,128 +3,348 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KAYA – Main</title>
+  <title>KAYA – Great War Protocol</title>
 
   <style>
+    :root {
+      --bg: #0e0e0e;
+      --card: #1a1a1a;
+      --card2: #141414;
+      --text: #ffffff;
+      --muted: #bdbdbd;
+      --border: rgba(255,255,255,0.08);
+      --btn: #ffffff;
+      --btnText: #000000;
+      --danger: #ff4d4d;
+      --ok: #6ee7b7;
+    }
+
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background: #0e0e0e;
-      color: white;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
       padding: 40px;
     }
 
     h1 {
-      margin-bottom: 20px;
+      margin: 0 0 22px 0;
+      font-size: 42px;
+      letter-spacing: -0.02em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      max-width: 1100px;
     }
 
     .card {
-      background: #1a1a1a;
-      padding: 20px;
-      border-radius: 10px;
-      margin-bottom: 20px;
+      background: linear-gradient(180deg, var(--card), var(--card2));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 18px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
     }
 
     input {
-      padding: 8px;
-      margin-right: 10px;
-      margin-bottom: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      outline: none;
+      min-width: 260px;
     }
 
     button {
-      padding: 10px 20px;
-      border: none;
-      background: white;
-      color: black;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--btn);
+      color: var(--btnText);
       cursor: pointer;
-      border-radius: 5px;
-      margin-right: 10px;
+      font-weight: 600;
     }
 
+    button.secondary {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.danger {
+      background: rgba(255, 77, 77, 0.12);
+      color: var(--danger);
+      border: 1px solid rgba(255, 77, 77, 0.25);
+    }
+
+    .status {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .ok { color: var(--ok); }
+    .err { color: var(--danger); }
+
     pre {
-      background: #111;
-      padding: 15px;
-      border-radius: 8px;
+      margin-top: 12px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 12px;
       overflow: auto;
+      max-height: 320px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .kpi .box {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 16px; margin-top: 6px; font-weight: 700; }
+
+    @media (max-width: 820px) {
+      body { padding: 18px; }
+      h1 { font-size: 30px; }
+      input { min-width: 100%; }
+      .kpi { grid-template-columns: 1fr; }
     }
   </style>
 </head>
-<body>
 
+<body>
   <h1>KAYA – Great War Protocol</h1>
 
-  <div class="card">
-    <h2>Authentication</h2>
+  <div class="grid">
 
-    <input type="email" id="email" placeholder="Email" />
-    <input type="password" id="password" placeholder="Password" />
+    <!-- AUTH -->
+    <div class="card">
+      <h2>Authentication</h2>
 
-    <br/>
+      <div class="row">
+        <div>
+          <label>Email</label>
+          <input type="email" id="email" placeholder="you@email.com" />
+        </div>
 
-    <button onclick="signUp()">Sign Up</button>
-    <button onclick="signIn()">Sign In</button>
-    <button onclick="logout()">Logout</button>
+        <div>
+          <label>Password</label>
+          <input type="password" id="password" placeholder="••••••••" />
+        </div>
+      </div>
 
-    <p id="auth-status"></p>
-  </div>
+      <div class="row">
+        <button onclick="signUp()">Sign Up</button>
+        <button onclick="signIn()">Sign In</button>
+        <button class="danger" onclick="logout()">Logout</button>
+        <button class="secondary" onclick="whoAmI()">Who am I?</button>
+      </div>
 
-  <div class="card">
-    <h2>Load Program</h2>
-    <button onclick="loadProgram()">Load Programs Table</button>
-    <pre id="program-data"></pre>
+      <div id="auth-status" class="status">Not logged in.</div>
+
+      <div class="kpi">
+        <div class="box">
+          <div class="label">User</div>
+          <div class="value" id="kpi-user">—</div>
+        </div>
+        <div class="box">
+          <div class="label">User ID</div>
+          <div class="value" id="kpi-userid">—</div>
+        </div>
+        <div class="box">
+          <div class="label">Session</div>
+          <div class="value" id="kpi-session">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROGRAMS -->
+    <div class="card">
+      <h2>Programs</h2>
+      <div class="row">
+        <button onclick="loadPrograms()">Load Programs Table</button>
+      </div>
+      <pre id="programs-data">Click “Load Programs Table”</pre>
+    </div>
+
+    <!-- ENROLLMENT -->
+    <div class="card">
+      <h2>My Enrollment</h2>
+      <div class="row">
+        <button onclick="loadEnrollment()">Load My Enrollment</button>
+      </div>
+      <pre id="enrollment-data">Click “Load My Enrollment”</pre>
+    </div>
+
+    <!-- LESSONS -->
+    <div class="card">
+      <h2>Lessons (Great War Protocol)</h2>
+      <div class="row">
+        <button onclick="loadLessons()">Load 21 Lessons</button>
+      </div>
+      <pre id="lessons-data">Click “Load 21 Lessons”</pre>
+    </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <script>
+    // ✅ Your Supabase Data API values
     const SUPABASE_URL = "https://joijzglzjysqffdmtmrp.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_ZKL6sXNJ89e0Ybh7f78SpA_j8_dnniw";
 
-    const supabaseClient = supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_ANON_KEY
-    );
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function setStatus(msg, type = "info") {
+      const el = document.getElementById("auth-status");
+      el.classList.remove("ok", "err");
+      if (type === "ok") el.classList.add("ok");
+      if (type === "err") el.classList.add("err");
+      el.textContent = msg;
+    }
+
+    function setKpis({ email = "—", id = "—", session = "—" } = {}) {
+      document.getElementById("kpi-user").textContent = email;
+      document.getElementById("kpi-userid").textContent = id ? (id.slice(0, 8) + "…" + id.slice(-6)) : "—";
+      document.getElementById("kpi-session").textContent = session;
+    }
+
+    async function whoAmI() {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      const { data: { session } } = await supabaseClient.auth.getSession();
+
+      if (!user) {
+        setStatus("Not logged in.", "info");
+        setKpis({ email: "—", id: "—", session: session ? "yes" : "no" });
+        return;
+      }
+
+      setStatus("Logged in.", "ok");
+      setKpis({ email: user.email, id: user.id, session: session ? "yes" : "no" });
+    }
 
     async function signUp() {
-      const email = document.getElementById("email").value;
+      const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
 
-      const { error } = await supabaseClient.auth.signUp({
-        email,
-        password
-      });
+      const { error } = await supabaseClient.auth.signUp({ email, password });
 
-      document.getElementById("auth-status").innerText =
-        error ? error.message : "User created successfully!";
+      if (error) return setStatus("Sign up error: " + error.message, "err");
+
+      setStatus("User created! (If email confirmations are enabled, check inbox.)", "ok");
+      await whoAmI();
     }
 
     async function signIn() {
-      const email = document.getElementById("email").value;
+      const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
 
-      const { error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password
-      });
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
-      document.getElementById("auth-status").innerText =
-        error ? error.message : "Logged in!";
+      if (error) return setStatus("Sign in error: " + error.message, "err");
+
+      setStatus("Logged in!", "ok");
+      await whoAmI();
     }
 
     async function logout() {
-      await supabaseClient.auth.signOut();
-      document.getElementById("auth-status").innerText = "Logged out.";
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) return setStatus("Logout error: " + error.message, "err");
+      setStatus("Logged out.", "info");
+      setKpis({ email: "—", id: "—", session: "no" });
     }
 
-    async function loadProgram() {
+    async function loadPrograms() {
       const { data, error } = await supabaseClient
         .from("programs")
-        .select("*");
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10);
 
-      document.getElementById("program-data").innerText =
-        error ? error.message : JSON.stringify(data, null, 2);
+      document.getElementById("programs-data").textContent =
+        error ? ("ERROR: " + JSON.stringify(error, null, 2)) : JSON.stringify(data, null, 2);
     }
-  </script>
 
+    async function loadEnrollment() {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) {
+        document.getElementById("enrollment-data").textContent = "Not logged in.";
+        return;
+      }
+
+      const { data, error } = await supabaseClient
+        .from("program_enrollments")
+        .select("status, week, day, started_at, program_id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      document.getElementById("enrollment-data").textContent =
+        error ? ("ERROR: " + JSON.stringify(error, null, 2)) : JSON.stringify(data, null, 2);
+    }
+
+    async function loadLessons() {
+      // Find program
+      const { data: programs, error: pErr } = await supabaseClient
+        .from("programs")
+        .select("id, slug, title")
+        .eq("slug", "great-war-protocol")
+        .limit(1);
+
+      if (pErr || !programs || programs.length === 0) {
+        document.getElementById("lessons-data").textContent =
+          "ERROR: " + JSON.stringify(pErr || { message: "Program not found" }, null, 2);
+        return;
+      }
+
+      const programId = programs[0].id;
+
+      // Load lessons
+      const { data: lessons, error } = await supabaseClient
+        .from("lessons")
+        .select("week, day, title, slug")
+        .eq("program_id", programId)
+        .order("week", { ascending: true })
+        .order("day", { ascending: true });
+
+      document.getElementById("lessons-data").textContent =
+        error ? ("ERROR: " + JSON.stringify(error, null, 2)) : JSON.stringify(lessons, null, 2);
+    }
+
+    // On load, refresh auth state
+    whoAmI();
+  </script>
 </body>
 </html>
