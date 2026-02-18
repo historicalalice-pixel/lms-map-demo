@@ -2,17 +2,6 @@
 import * as THREE from "three";
 import { GALLERY_ITEMS } from "./data.js";
 
-/**
- * KAYA Main Gallery — Rail / Conveyor (product-grade)
- * - 3 rows: top / mid / bot
- * - Infinite loop
- * - Snap: focused (center) card is ALWAYS centered on mid row
- * - Mid: max 4 visible cards
- * - Top/Bottom: 2 visible cards
- * - Opaque materials (no transparency artifacts)
- * - Smooth wheel + drag
- * - Camera: subtle drift (doesn't break center composition)
- */
 export function initMainGallery({ mountEl }) {
   if (!mountEl) throw new Error("initMainGallery: mountEl is required");
 
@@ -22,14 +11,12 @@ export function initMainGallery({ mountEl }) {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
 
-  const mod = (n, m) => ((n % m) + m) % m;
-
-  // shortest delta on a ring: [-count/2 .. +count/2]
-  const ringDelta = (i, focus, count) => {
-    let d = i - focus;
-    d = ((d % count) + count) % count; // 0..count-1
-    if (d > count / 2) d -= count;
-    return d;
+  // wrap to (-range/2 .. +range/2]
+  const wrapCentered = (x, range) => {
+    let v = x % range;
+    if (v > range / 2) v -= range;
+    if (v <= -range / 2) v += range;
+    return v;
   };
 
   // -----------------------------
@@ -38,7 +25,6 @@ export function initMainGallery({ mountEl }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.setClearColor(0x000000, 0);
-  renderer.sortObjects = true;
 
   mountEl.innerHTML = "";
   mountEl.appendChild(renderer.domElement);
@@ -48,53 +34,73 @@ export function initMainGallery({ mountEl }) {
   // Scene / Camera
   // -----------------------------
   const scene = new THREE.Scene();
-
-  // Slightly narrower FOV = “premium UI”
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 9000);
 
-  // Camera is basically frontal. Drift is subtle and does NOT move the composition off-center.
-  const CAM_Z = 2200;
-  const CAM_Y = 180;
-  const DRIFT_X = 35;   // tiny lateral drift
-  const DRIFT_Y = 22;   // tiny vertical drift
-  const DRIFT_SPD = 0.20;
+  // camera base
+  const CAM_Z = 2200; // further => reads like rows, not cluster
+  const CAM_Y = 120;
 
-  // Mouse influence (cinematic, small)
-  const MOUSE_X = 55;
-  const MOUSE_Y = 35;
+  // drift (very subtle)
+  const DRIFT_SPD = 0.18;
+  const DRIFT_X = 18;
+  const DRIFT_Y = 14;
+
+  // micro-parallax by mouse (also subtle)
+  const MOUSE_X = 28;
+  const MOUSE_Y = 20;
+
   let mx = 0, my = 0, mxT = 0, myT = 0;
 
+  function onMouseMove(e) {
+    const r = renderer.domElement.getBoundingClientRect();
+    const nx = (e.clientX - r.left) / r.width;
+    const ny = (e.clientY - r.top) / r.height;
+    mxT = (nx - 0.5) * 2;
+    myT = (0.5 - ny) * 2;
+  }
+  window.addEventListener("mousemove", onMouseMove, { passive: true });
+
   // -----------------------------
-  // Layout
+  // Layout: 3 straight rails (no sphere)
   // -----------------------------
   const CARD_W = 360;
   const CARD_H = 240;
 
-  // “середньо” spacing
-  const GAP_X = 150;
+  // ✅ spacing to avoid overlap + "premium air"
+  const GAP_X = 260;
   const STEP_X = CARD_W + GAP_X;
 
-  // 3 rows
   const ROW_GAP = CARD_H * 1.05;
   const Y_MID = 0;
   const Y_TOP = +ROW_GAP;
   const Y_BOT = -ROW_GAP;
 
-  // Depth separation (so rows don't look like a flat grid)
+  // subtle depth layering per row (still straight)
   const Z_MID = 0;
-  const Z_TOP = -120;
-  const Z_BOT = -150;
+  const Z_TOP = -95;
+  const Z_BOT = -115;
 
-  // Slight row skew to feel “designed”
-  const TILT_TOP = 0.06;
-  const TILT_BOT = -0.06;
-
-  // How many cards exist (loop)
   const COUNT = 36;
+  const BELT_LEN = COUNT * STEP_X;
 
-  // Visibility counts
-  const MID_MAX_VISIBLE = 4;   // strict max 4 visible
-  const SIDE_VISIBLE = 2;
+  // Visibility windows (strict)
+  // mid: max 4 cards
+  const MID_MIN_X = -1.70 * STEP_X;
+  const MID_MAX_X = +2.70 * STEP_X;
+
+  // top/bot: max 2 cards
+  const SIDE_MIN_X = -0.70 * STEP_X;
+  const SIDE_MAX_X = +1.70 * STEP_X;
+
+  // row speed differences (subtle parallax)
+  const SPEED_MID = 1.0;
+  const SPEED_TOP = 1.04;
+  const SPEED_BOT = 0.96;
+
+  // row phase offsets so top/bot don't align perfectly with mid
+  const PHASE_MID = 0.00;
+  const PHASE_TOP = 0.55;
+  const PHASE_BOT = 0.25;
 
   // -----------------------------
   // Textures (opaque)
@@ -124,7 +130,6 @@ export function initMainGallery({ mountEl }) {
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
     const g = c.getContext("2d");
-
     const rng = mulberry32(seed);
 
     g.fillStyle = "rgb(10,12,22)";
@@ -196,14 +201,14 @@ export function initMainGallery({ mountEl }) {
   }
 
   // -----------------------------
-  // Build cards
+  // Build rows
   // -----------------------------
   const planeGeo = new THREE.PlaneGeometry(CARD_W, CARD_H);
 
-  function buildRow({ y, zBase, tilt, rowKind }) {
+  function buildRow({ y, z, rowKind }) {
     const group = new THREE.Group();
-    group.position.set(0, y, zBase);
-    group.userData = { y, zBase, tilt, rowKind };
+    group.position.set(0, y, z);
+    group.userData = { rowKind };
     scene.add(group);
 
     for (let i = 0; i < COUNT; i++) {
@@ -212,8 +217,13 @@ export function initMainGallery({ mountEl }) {
           ? GALLERY_ITEMS[i % GALLERY_ITEMS.length]
           : { title: `Картка ${i + 1}`, subtitle: "Модуль / Епізод" };
 
-      const tex = makeCardTexture(item.title, item.subtitle, i * 991 + Math.floor((y + 1000) * 7));
+      const tex = makeCardTexture(
+        item.title,
+        item.subtitle,
+        i * 991 + Math.floor((y + 1000) * 7)
+      );
 
+      // opaque material => stable
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: false,
@@ -230,48 +240,34 @@ export function initMainGallery({ mountEl }) {
     return group;
   }
 
-  const rowMid = buildRow({ y: Y_MID, zBase: Z_MID, tilt: 0.0, rowKind: "mid" });
-  const rowTop = buildRow({ y: Y_TOP, zBase: Z_TOP, tilt: TILT_TOP, rowKind: "top" });
-  const rowBot = buildRow({ y: Y_BOT, zBase: Z_BOT, tilt: TILT_BOT, rowKind: "bot" });
+  const rowMid = buildRow({ y: Y_MID, z: Z_MID, rowKind: "mid" });
+  const rowTop = buildRow({ y: Y_TOP, z: Z_TOP, rowKind: "top" });
+  const rowBot = buildRow({ y: Y_BOT, z: Z_BOT, rowKind: "bot" });
 
   // -----------------------------
-  // Motion: scrollX (in “card steps”) + snap
+  // Input: wheel + drag
   // -----------------------------
-  // scrollX is continuous and measured in “card widths”:
-  // 0 => card 0 centered; 1 => card 1 centered, etc.
-  let scrollX = 0;
+  let scrollX = 0; // px along belt
   let vel = 0;
   let impulse = 0;
 
-  const V_MAX = 0.060;        // max speed in steps/sec-ish (we scale with dt)
+  // tuned to feel calm
+  const V_MAX = 2.6 * 60; // px/sec
   const DAMPING = 0.90;
   const IMPULSE_DECAY = 0.18;
 
   const SNAP_ENABLE = true;
-  const SNAP_WHEN_VEL_LT = 0.006;
-  const SNAP_LERP = 0.16;
-  const SNAP_KILL_VEL = 0.80;
+  const SNAP_WHEN_VEL_LT = 22; // px/sec
+  const SNAP_LERP = 0.22;
+  const SNAP_KILL_VEL = 0.75;
 
-  // Start: card 0 centered (no jump)
-  scrollX = 0;
-
-  // Input
   let down = false;
   let lastX = 0;
-
-  function onMouseMove(e) {
-    const r = renderer.domElement.getBoundingClientRect();
-    const nx = (e.clientX - r.left) / r.width;
-    const ny = (e.clientY - r.top) / r.height;
-    mxT = (nx - 0.5) * 2;
-    myT = (0.5 - ny) * 2;
-  }
 
   function onWheel(e) {
     e.preventDefault();
     const d = clamp(e.deltaY, -120, 120);
-    // wheel -> impulse in “steps”
-    impulse += d * 0.0012;
+    impulse += d * 2.2;
   }
 
   function onPointerDown(e) {
@@ -283,15 +279,13 @@ export function initMainGallery({ mountEl }) {
     if (!down) return;
     const dx = e.clientX - lastX;
     lastX = e.clientX;
-    // drag horizontally moves rail (pixel -> step)
-    impulse += -dx / 1400; // tuned for “premium” drag
+    impulse += -dx * 2.0;
   }
 
   function onPointerUp() {
     down = false;
   }
 
-  window.addEventListener("mousemove", onMouseMove, { passive: true });
   renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
   window.addEventListener("pointerdown", onPointerDown, { passive: true });
   window.addEventListener("pointermove", onPointerMove, { passive: true });
@@ -312,91 +306,68 @@ export function initMainGallery({ mountEl }) {
   onResize();
 
   // -----------------------------
-  // Focus & visibility policy
+  // Styling
   // -----------------------------
-  // Focus index is the card that should be centered on mid row.
-  const focusIndex = () => mod(Math.round(scrollX), COUNT);
+  function styleByX(mesh, x, rowKind) {
+    const ax = Math.abs(x);
 
-  // We want “max 4 visible” on mid.
-  // To keep it feeling stable, we show offsets around focus:
-  // always show: -1, 0, +1
-  // plus one extra based on direction (so max=4 but still feels natural)
-  function midVisibleOffsets(direction) {
-    // direction: -1 (left), +1 (right), 0 (stable)
-    if (direction < -0.2) return [-2, -1, 0, +1];
-    return [-1, 0, +1, +2];
-  }
-
-  function sideVisibleOffsets(direction) {
-    // 2 visible on top/bot: focus + one neighbor in direction of travel
-    if (direction < -0.2) return [0, -1];
-    return [0, +1];
-  }
-
-  // Product-like styling
-  function styleByDelta(mesh, absD, rowKind) {
     if (rowKind === "mid") {
-      // focus bigger, neighbors smaller, second-neighbor smallest
-      const s = absD === 0 ? 1.14 : absD === 1 ? 1.04 : 0.94;
-      const c = absD === 0 ? 1.0 : absD === 1 ? 0.82 : 0.68;
+      const t = clamp(1 - ax / (2.2 * STEP_X), 0, 1);
+      const s = lerp(0.96, 1.06, t); // ✅ hero but not overlap
+      const c = lerp(0.70, 1.00, t);
       mesh.scale.setScalar(s);
       mesh.material.color.setScalar(c);
     } else {
-      const s = absD === 0 ? 0.92 : 0.86;
-      const c = absD === 0 ? 0.58 : 0.50;
+      const t = clamp(1 - ax / (1.4 * STEP_X), 0, 1);
+      const s = lerp(0.86, 0.92, t);
+      const c = lerp(0.50, 0.62, t);
       mesh.scale.setScalar(s);
       mesh.material.color.setScalar(c);
     }
   }
 
-  // Update a row by deltas around focus (on a ring)
-  function updateRow(group, speedMul, direction) {
-    const { rowKind, tilt } = group.userData;
-    const focus = focusIndex();
-    const frac = scrollX - Math.round(scrollX); // -0.5..+0.5 typically
+  // -----------------------------
+  // Update row (straight belt)
+  // -----------------------------
+  function updateRow(group, speedMul, phaseSteps) {
+    const { rowKind } = group.userData;
 
-    const offsets =
-      rowKind === "mid"
-        ? midVisibleOffsets(direction)
-        : sideVisibleOffsets(direction);
+    const sX = scrollX * speedMul + phaseSteps * STEP_X;
 
-    const visible = new Set(offsets);
+    const minX = rowKind === "mid" ? MID_MIN_X : SIDE_MIN_X;
+    const maxX = rowKind === "mid" ? MID_MAX_X : SIDE_MAX_X;
 
     for (const mesh of group.children) {
       const i = mesh.userData.i;
-      const d = ringDelta(i, focus, COUNT);
 
-      if (!visible.has(d)) {
+      const base = i * STEP_X;
+      const x = wrapCentered(base - sX, BELT_LEN);
+
+      if (x < minX || x > maxX) {
         mesh.visible = false;
         continue;
       }
       mesh.visible = true;
 
-      // Rail position: center focus (d=0) at x=0 when snapped.
-      // frac shifts during scrolling.
-      const x = (d - frac) * STEP_X * speedMul;
+      mesh.position.set(x, 0, 0);
 
-      // Small Z curve (gives depth without circle physics)
-      // Cards slightly curve backward away from center
-      const absD = Math.abs(d);
-      const zCurve = -absD * 26;
-
-      mesh.position.set(x, 0, zCurve);
-
-      // Face camera (keeps “interface” feel)
+      // face camera, keep row straight
       mesh.lookAt(camera.position.x, camera.position.y, camera.position.z);
+      mesh.rotation.y = 0;
 
-      // Gentle row tilt
-      mesh.rotation.z += tilt;
+      styleByX(mesh, x, rowKind);
 
-      // Subtle yaw for motion richness (no chaos)
-      mesh.rotation.y += clamp(x / 3800, -0.18, 0.18);
-
-      styleByDelta(mesh, absD, rowKind);
-
-      // Stable order: mid over top/bot, focus above neighbors
-      mesh.renderOrder = 1000 + (rowKind === "mid" ? 60 : 0) + (10 - absD);
+      // stable ordering: mid always above
+      mesh.renderOrder =
+        1000 + (rowKind === "mid" ? 80 : 0) + (10 - Math.round(Math.abs(x) / STEP_X));
     }
+  }
+
+  // Snap target so mid center card lands exactly at x=0
+  function nearestSnapX() {
+    const steps = scrollX / STEP_X;
+    const nearest = Math.round(steps);
+    return nearest * STEP_X;
   }
 
   // -----------------------------
@@ -408,48 +379,40 @@ export function initMainGallery({ mountEl }) {
     const dt = Math.min((now - lastT) / 1000, 0.033);
     lastT = now;
 
-    // motion
-    vel += impulse;
+    // inertia
+    vel += impulse * (dt * 60);
     impulse *= Math.pow(IMPULSE_DECAY, dt * 60);
+
     vel = clamp(vel, -V_MAX, V_MAX);
     vel *= Math.pow(DAMPING, dt * 60);
 
-    scrollX += vel;
+    scrollX += vel * dt;
 
-    // Keep scrollX bounded to avoid float explosion (still infinite visually)
-    // preserve fractional movement smoothly
-    if (scrollX > 1e6 || scrollX < -1e6) {
-      scrollX = mod(scrollX, COUNT);
-    }
+    // keep bounded (avoid float explosion)
+    if (scrollX > 1e7 || scrollX < -1e7) scrollX = wrapCentered(scrollX, BELT_LEN);
 
     // mouse smoothing
     mx = lerp(mx, mxT, 1 - Math.pow(0.965, dt * 60));
     my = lerp(my, myT, 1 - Math.pow(0.965, dt * 60));
 
-    // camera drift (does NOT break centered composition)
+    // camera drift (subtle)
     const t = now * 0.001;
     const driftX = Math.sin(t * DRIFT_SPD) * DRIFT_X;
     const driftY = Math.cos(t * DRIFT_SPD * 0.9) * DRIFT_Y;
 
-    camera.position.set(
-      driftX + mx * MOUSE_X,
-      CAM_Y + driftY + -my * MOUSE_Y,
-      CAM_Z
-    );
+    camera.position.set(driftX + mx * MOUSE_X, CAM_Y + driftY + -my * MOUSE_Y, CAM_Z);
     camera.lookAt(0, 0, 0);
 
-    // snap: center focus card (mid) to x=0
+    // snap (mid master)
     if (SNAP_ENABLE && !down && Math.abs(vel) < SNAP_WHEN_VEL_LT) {
-      const target = Math.round(scrollX);
+      const target = nearestSnapX();
       scrollX = lerp(scrollX, target, SNAP_LERP);
       vel *= SNAP_KILL_VEL;
     }
 
-    const direction = vel; // sign indicates travel direction
-
-    updateRow(rowMid, 1.0, direction);
-    updateRow(rowTop, 1.02, direction);
-    updateRow(rowBot, 0.98, direction);
+    updateRow(rowMid, SPEED_MID, PHASE_MID);
+    updateRow(rowTop, SPEED_TOP, PHASE_TOP);
+    updateRow(rowBot, SPEED_BOT, PHASE_BOT);
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
