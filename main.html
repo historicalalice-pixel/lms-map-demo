@@ -237,7 +237,8 @@
 
     function setKpis({ email = "—", id = "—", session = "—" } = {}) {
       document.getElementById("kpi-user").textContent = email;
-      document.getElementById("kpi-userid").textContent = id ? (id.slice(0, 8) + "…" + id.slice(-6)) : "—";
+      document.getElementById("kpi-userid").textContent =
+        id && id.length > 14 ? (id.slice(0, 8) + "…" + id.slice(-6)) : (id || "—");
       document.getElementById("kpi-session").textContent = session;
     }
 
@@ -315,11 +316,11 @@
         error ? ("ERROR: " + JSON.stringify(error, null, 2)) : JSON.stringify(data, null, 2);
     }
 
+    // ✅ FIXED: lessons table has NO "slug" column, so we don't request it
     async function loadLessons() {
-      // Find program
       const { data: programs, error: pErr } = await supabaseClient
         .from("programs")
-        .select("id, slug, title")
+        .select("id")
         .eq("slug", "great-war-protocol")
         .limit(1);
 
@@ -331,10 +332,9 @@
 
       const programId = programs[0].id;
 
-      // Load lessons
       const { data: lessons, error } = await supabaseClient
         .from("lessons")
-        .select("week, day, title, slug")
+        .select("week, day, title")   // <-- no slug
         .eq("program_id", programId)
         .order("week", { ascending: true })
         .order("day", { ascending: true });
@@ -343,7 +343,7 @@
         error ? ("ERROR: " + JSON.stringify(error, null, 2)) : JSON.stringify(lessons, null, 2);
     }
 
-    // On load, refresh auth state
+    // On load
     whoAmI();
   </script>
 </body>
