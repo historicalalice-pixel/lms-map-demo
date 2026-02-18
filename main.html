@@ -257,6 +257,7 @@
         <button onclick="loadPrograms()">Load Programs</button>
         <button onclick="loadEnrollment()">Load My Enrollment</button>
         <button onclick="loadLessons()">Load Lessons</button>
+        <button class="secondary" onclick="loadCompletions()">Load Completions</button>
       </div>
 
       <pre id="debug-out">—</pre>
@@ -271,7 +272,8 @@
     const SUPABASE_URL = "https://joijzglzjysqffdmtmrp.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_ZKL6sXNJ89e0Ybh7f78SpA_j8_dnniw";
 
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // keep naming consistent with your snippet
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // cached state
     let currentUser = null;
@@ -326,9 +328,8 @@
     }
 
     async function refreshState() {
-      // user + session
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
 
       currentUser = user || null;
 
@@ -346,7 +347,7 @@
       setKpis({ email: currentUser.email, id: currentUser.id, session: session ? "yes" : "no" });
 
       // program id
-      const { data: programs, error: pErr } = await supabaseClient
+      const { data: programs, error: pErr } = await supabase
         .from("programs")
         .select("id")
         .eq("slug", "great-war-protocol")
@@ -361,7 +362,7 @@
       currentProgramId = programs[0].id;
 
       // enrollment
-      await loadEnrollment(true); // silent
+      await loadEnrollment(true);
       setTodayKpis(currentEnrollment);
     }
 
@@ -369,7 +370,7 @@
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
 
-      const { error } = await supabaseClient.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ email, password });
       if (error) return setAuthStatus("Sign up error: " + error.message, "err");
 
       setAuthStatus("User created! (If email confirmations are enabled, check inbox.)", "ok");
@@ -380,7 +381,7 @@
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
 
-      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return setAuthStatus("Sign in error: " + error.message, "err");
 
       setAuthStatus("Logged in!", "ok");
@@ -388,7 +389,7 @@
     }
 
     async function logout() {
-      const { error } = await supabaseClient.auth.signOut();
+      const { error } = await supabase.auth.signOut();
       if (error) return setAuthStatus("Logout error: " + error.message, "err");
 
       setAuthStatus("Logged out.", "info");
@@ -404,7 +405,7 @@
     // ---------- DATA LOADERS ----------
 
     async function loadPrograms() {
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabase
         .from("programs")
         .select("*")
         .order("created_at", { ascending: false })
@@ -420,7 +421,7 @@
         return null;
       }
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabase
         .from("program_enrollments")
         .select("id, status, week, day, started_at, program_id, created_at")
         .eq("user_id", currentUser.id)
@@ -448,7 +449,7 @@
         return;
       }
 
-      const { data: lessons, error } = await supabaseClient
+      const { data: lessons, error } = await supabase
         .from("lessons")
         .select("id, week, day, title")
         .eq("program_id", currentProgramId)
@@ -457,6 +458,23 @@
 
       document.getElementById("debug-out").textContent =
         error ? ("LESSONS ERROR:\n" + JSON.stringify(error, null, 2)) : ("LESSONS:\n" + JSON.stringify(lessons, null, 2));
+    }
+
+    async function loadCompletions() {
+      if (!currentUser) {
+        document.getElementById("debug-out").textContent = "Not logged in.";
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("lesson_completions")
+        .select("id, created_at, completed_at, lesson_id, time_spent_seconds, confidence_rating, notes")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      document.getElementById("debug-out").textContent =
+        error ? ("COMPLETIONS ERROR:\n" + JSON.stringify(error, null, 2)) : ("COMPLETIONS:\n" + JSON.stringify(data, null, 2));
     }
 
     // ---------- TODAY FLOW ----------
@@ -480,7 +498,7 @@
       const week = currentEnrollment.week || 1;
       const day = currentEnrollment.day || 1;
 
-      const { data: lessons, error } = await supabaseClient
+      const { data: lessons, error } = await supabase
         .from("lessons")
         .select("id, week, day, title")
         .eq("program_id", currentProgramId)
@@ -513,11 +531,7 @@
         nextWeek = week + 1;
       }
 
-      // cap at 3 weeks (21 days)
-      if (nextWeek > 3) {
-        return { done: true, week: 3, day: 7 };
-      }
-
+      if (nextWeek > 3) return { done: true, week: 3, day: 7 };
       return { done: false, week: nextWeek, day: nextDay };
     }
 
@@ -531,7 +545,7 @@
       const day = currentEnrollment.day || 1;
 
       // find today lesson id
-      const { data: lessons, error: lErr } = await supabaseClient
+      const { data: lessons, error: lErr } = await supabase
         .from("lessons")
         .select("id, title")
         .eq("program_id", currentProgramId)
@@ -551,28 +565,27 @@
 
       const lessonId = lessons[0].id;
 
-      // 1) insert completion
-      // NOTE: if your schema differs, this will show exact error; we'll adjust.
-      const { error: cErr } = await supabaseClient
+      // ✅ FIX: lesson_completions has NO program_id
+      const { error: completionError } = await supabase
         .from("lesson_completions")
         .insert([{
           user_id: currentUser.id,
-          program_id: currentProgramId,
-          lesson_id: lessonId
+          lesson_id: lessonId,
+          completed_at: new Date().toISOString()
         }]);
 
-      if (cErr) {
-        setTodayStatus("Completion insert error (schema mismatch or RLS): " + cErr.message, "err");
+      if (completionError) {
+        setTodayStatus("Completion insert error (schema mismatch or RLS): " + completionError.message, "err");
         document.getElementById("today-lesson").textContent =
-          "Completion error details:\n" + JSON.stringify(cErr, null, 2);
+          "Completion error details:\n" + JSON.stringify(completionError, null, 2);
         return;
       }
 
-      // 2) advance enrollment week/day (or mark completed)
+      // advance enrollment week/day (or mark completed)
       const next = computeNextWeekDay(week, day);
 
       if (next.done) {
-        const { error: uErr } = await supabaseClient
+        const { error: uErr } = await supabase
           .from("program_enrollments")
           .update({ status: "completed", week: 3, day: 7 })
           .eq("id", currentEnrollment.id);
@@ -584,7 +597,7 @@
 
         setTodayStatus("✅ Completed! Enrollment marked as completed.", "ok");
       } else {
-        const { error: uErr } = await supabaseClient
+        const { error: uErr } = await supabase
           .from("program_enrollments")
           .update({ week: next.week, day: next.day })
           .eq("id", currentEnrollment.id);
@@ -597,13 +610,11 @@
         setTodayStatus(`✅ Marked complete. Advanced to Week ${next.week} Day ${next.day}.`, "ok");
       }
 
-      // refresh enrollment + load next lesson
       await loadEnrollment(true);
       setTodayKpis(currentEnrollment);
       await loadTodayLesson();
     }
 
-    // debug-only: advance without completion insert
     async function advanceOneDay() {
       if (!currentUser) return setTodayStatus("Not logged in.", "warn");
       if (!currentEnrollment) await loadEnrollment(true);
@@ -613,10 +624,9 @@
       const day = currentEnrollment.day || 1;
 
       const next = computeNextWeekDay(week, day);
-
       const patch = next.done ? { status: "completed", week: 3, day: 7 } : { week: next.week, day: next.day };
 
-      const { error } = await supabaseClient
+      const { error } = await supabase
         .from("program_enrollments")
         .update(patch)
         .eq("id", currentEnrollment.id);
