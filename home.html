@@ -1,48 +1,52 @@
-:root { color-scheme: dark; }
-html, body { height: 100%; margin: 0; background: #070A12; color: #E9EEF9; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KAYA | Home</title>
+  <link rel="stylesheet" href="./home.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">KAYA</div>
+    <nav class="nav">
+      <a href="./home.html" data-i18n="navHome">Головна</a>
+      <a href="./about.html" data-i18n="navAbout">Про нас</a>
+      <a href="./blog.html" data-i18n="navBlog">Блог</a>
+    </nav>
 
-.topbar{
-  position: fixed; inset: 0 0 auto 0; height: 56px;
-  display:flex; align-items:center; justify-content:space-between;
-  padding: 0 18px; z-index: 10;
-  background: linear-gradient(to bottom, rgba(7,10,18,.75), rgba(7,10,18,0));
-}
-.brand{ font-weight: 700; letter-spacing: .08em; }
-.nav{ display:flex; gap: 14px; }
-.nav a{ color: #C7D2EA; text-decoration:none; font-size: 14px; }
-.nav a:hover{ color:#FFFFFF; }
-.lang{ display:flex; align-items:center; gap: 8px; }
-.lang-btn{ background: transparent; border: 0; color:#C7D2EA; cursor:pointer; padding: 6px 8px; }
-.lang-btn.active{ color:#FFFFFF; text-decoration: underline; text-underline-offset: 6px; }
+    <div class="lang">
+      <button class="lang-btn" data-lang="uk">UA</button>
+      <span>•</span>
+      <button class="lang-btn" data-lang="en">EN</button>
+    </div>
+  </header>
 
-.stage{ height: 100%; display:flex; flex-direction:column; padding-top: 56px; }
-.hero{ padding: 22px 18px 12px; }
-.hero-title{ font-size: 22px; font-weight: 700; letter-spacing: .01em; }
-.hero-sub{ margin-top: 6px; color:#C7D2EA; font-size: 14px; max-width: 640px; }
+  <main class="stage">
+    <div class="hero">
+      <div class="hero-title" data-i18n="heroTitle">Історія — це простір.</div>
+      <div class="hero-sub" data-i18n="heroSub">Доторкнись до подій, щоб відкрити протокол.</div>
+    </div>
 
-.map-mount{ flex:1; min-height: 420px; }
-.hint{ position: fixed; left: 18px; bottom: 16px; color:#90A0BF; font-size: 12px; z-index: 10; }
+    <div id="mapMount" class="map-mount"></div>
 
-.modal{ position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; background: rgba(0,0,0,.55); z-index: 20; }
-.modal.hidden{ display:none; }
-.modal-card{
-  width: min(560px, calc(100% - 28px));
-  background: rgba(10,14,26,.92);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 18px;
-  padding: 16px 16px 14px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.45);
-  backdrop-filter: blur(10px);
-}
-.modal-close{ float:right; background:transparent; border:0; color:#C7D2EA; font-size: 22px; cursor:pointer; }
-.modal-title{ margin-top: 8px; font-size: 18px; font-weight: 700; }
-.modal-body{ margin-top: 10px; color:#C7D2EA; line-height: 1.45; }
-.modal-actions{ margin-top: 14px; display:flex; align-items:center; gap: 12px; }
-.cta{
-  background: rgba(255,255,255,.10);
-  border: 1px solid rgba(255,255,255,.16);
-  color:#fff; border-radius: 12px; padding: 10px 14px; cursor:pointer;
-}
-.cta:hover{ background: rgba(255,255,255,.14); }
-.secondary{ color:#C7D2EA; text-decoration:none; font-size: 14px; }
-.secondary:hover{ color:#fff; }
+    <div class="hint" data-i18n="hint">Drag — move • Scroll — time • Click — preview</div>
+  </main>
+
+  <!-- Preview modal -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="modalClose" class="modal-close" aria-label="Close">×</button>
+      <div id="modalTitle" class="modal-title">1914 — Початок</div>
+      <div id="modalBody" class="modal-body">Короткий опис події…</div>
+
+      <div class="modal-actions">
+        <button id="modalCTA" class="cta" data-i18n="ctaEnter">Увійти в простір</button>
+        <a class="secondary" href="./blog.html" data-i18n="ctaBlog">Читати блог →</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./home-map.js"></script>
+</body>
+</html>
