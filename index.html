@@ -370,7 +370,8 @@
       renderer.render(scene, camera);
 
       if (flying && flightT >= 1){
-        location.href = "./main.html#overview";
+        // ЄДИНА ЗМІНА: після стартового екрану йдемо на нову головну
+        location.href = "./home.html";
         return;
       }
 
